@@ -1,0 +1,26 @@
+[
+  {
+    "username": "Krishna.s",
+    "password": "Krishnasai@108",
+    "role": "admin",
+    "preferences": {
+      "defaultModule": "indices-india",
+      "defaultCapital": 10000,
+      "riskPerTrade": 1.5,
+      "jurisdiction": "IN",
+      "theme": "light"
+    }
+  },
+  {
+    "username": "admin",
+    "password": "Admin@1234",
+    "role": "admin",
+    "preferences": {
+      "defaultModule": "indices-india",
+      "defaultCapital": 10000,
+      "riskPerTrade": 1.5,
+      "jurisdiction": "IN"
+    }
+  }
+  
+]

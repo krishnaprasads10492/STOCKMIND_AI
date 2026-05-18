@@ -1,0 +1,69 @@
+{
+  "name": "stockmind-ai",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "start": "node start.js",
+    "start:dev": "node start.js --dev",
+    "start:build": "node start.js --build",
+    "start:no-ai": "node start.js --no-ai",
+    "dev": "concurrently \"vite\" \"node server/index.js\"",
+    "dev:frontend": "vite",
+    "dev:backend": "node server/index.js",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "eslint . --max-warnings=0",
+    "format": "prettier --write .",
+    "test": "vitest --run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest --coverage",
+    "prepare": "husky install",
+    "keygen": "node server/keygen/generate.js",
+    "adduser": "node server/keygen/addUser.js",
+    "reseed": "node server/keygen/reseed.js"
+  },
+  "lint-staged": {
+    "src/**/*.{js,jsx,css,md}": [
+      "prettier --write",
+      "eslint --fix"
+    ]
+  },
+  "dependencies": {
+    "argon2": "0.43.0",
+    "concurrently": "9.1.2",
+    "cors": "2.8.5",
+    "express": "4.21.2",
+    "express-rate-limit": "7.5.0",
+    "helmet": "8.0.0",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "react-router-dom": "7.6.0",
+    "recharts": "2.15.3",
+    "yahoo-finance2": "^2.13.3",
+    "zustand": "5.0.5"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.25.1",
+    "@testing-library/jest-dom": "6.6.3",
+    "@testing-library/react": "14.3.1",
+    "@testing-library/user-event": "14.6.1",
+    "@types/react": "19.1.2",
+    "@types/react-dom": "19.1.2",
+    "@vitejs/plugin-react": "5.1.1",
+    "babel-plugin-react-compiler": "19.1.0-rc.2",
+    "eslint": "9.25.1",
+    "eslint-config-prettier": "10.1.5",
+    "eslint-plugin-jsx-a11y": "6.10.2",
+    "eslint-plugin-react": "7.37.5",
+    "eslint-plugin-react-hooks": "5.2.0",
+    "eslint-plugin-react-refresh": "0.4.20",
+    "globals": "16.0.0",
+    "husky": "9.1.7",
+    "jsdom": "26.1.0",
+    "lint-staged": "15.5.1",
+    "prettier": "3.5.3",
+    "vite": "7.2.4",
+    "vitest": "3.1.3"
+  }
+}
