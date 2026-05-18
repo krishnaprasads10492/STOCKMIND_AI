@@ -1,0 +1,32 @@
+.disclaimer {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  padding: var(--space-4) var(--space-6);
+  background: rgba(239, 68, 68, 0.06);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: var(--radius-md);
+  margin: var(--space-4) 0;
+}
+
+.icon {
+  flex-shrink: 0;
+  font-size: var(--text-base);
+  line-height: 1.6;
+}
+
+.text {
+  font-size: var(--text-xs);
+  line-height: 1.7;
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+/* Compact variant for signal cards */
+.compact {
+  padding: var(--space-2) var(--space-4);
+}
+
+.compact .text {
+  font-size: 0.7rem;
+}

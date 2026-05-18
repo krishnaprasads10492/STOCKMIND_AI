@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- Dark background -->
+  <rect width="32" height="32" rx="7" fill="#060b14"/>
+  <!-- Cyber grid lines -->
+  <line x1="0" y1="16" x2="32" y2="16" stroke="#00d4ff" stroke-width="0.3" stroke-opacity="0.2"/>
+  <line x1="16" y1="0" x2="16" y2="32" stroke="#00d4ff" stroke-width="0.3" stroke-opacity="0.2"/>
+  <!-- Upward trend line — main icon -->
+  <polyline points="4,22 10,14 17,18 26,8" stroke="#00d4ff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Arrow head -->
+  <polyline points="21,8 26,8 26,13" stroke="#00d4ff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- AI dot — purple glow -->
+  <circle cx="17" cy="18" r="2.5" fill="#b060ff"/>
+  <circle cx="17" cy="18" r="1.2" fill="#e0b0ff"/>
+</svg>

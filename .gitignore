@@ -1,0 +1,76 @@
+# ── Dependencies ─────────────────────────────────────────────────────────────
+node_modules/
+ai_backend/venv/
+ai_backend/__pycache__/
+ai_backend/engine/__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# ── Build output ──────────────────────────────────────────────────────────────
+dist/
+dist-ssr/
+dist-electron/
+build/
+*.local
+
+# ── Environment & secrets ─────────────────────────────────────────────────────
+# NEVER commit real API keys or passwords
+.env
+.env.local
+.env.production
+.env.production.local
+.env.*.local
+
+# ── Encrypted data store ──────────────────────────────────────────────────────
+# Contains user data, predictions, encryption salt — never commit
+data/
+!data/.gitkeep
+
+# ── User credentials seed ─────────────────────────────────────────────────────
+# Contains plaintext passwords — never commit
+users-seed.json
+
+# ── JARVIS backups ────────────────────────────────────────────────────────────
+.jarvis_backups/
+
+# ── ML model artifacts ────────────────────────────────────────────────────────
+# Large binary files — distribute separately
+ai_backend/data/models/*.pkl
+ai_backend/data/models/*.pt
+ai_backend/data/models/*.json
+ai_backend/data/models/*.txt
+ai_backend/features/
+ai_backend/models/
+
+# ── Logs ──────────────────────────────────────────────────────────────────────
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ── Editor ────────────────────────────────────────────────────────────────────
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+Thumbs.db
+
+# ── Testing ───────────────────────────────────────────────────────────────────
+coverage/
+
+# ── OS ────────────────────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db

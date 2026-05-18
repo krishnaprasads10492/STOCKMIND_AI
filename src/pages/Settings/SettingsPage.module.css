@@ -1,0 +1,238 @@
+.page { display: flex; flex-direction: column; gap: var(--space-6); max-width: 600px; }
+.title { font-size: var(--text-2xl); font-weight: 700; }
+.form { display: flex; flex-direction: column; gap: var(--space-6); }
+.section {
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.sectionTitle { font-size: var(--text-base); font-weight: 600; color: var(--color-text-primary); }
+.field { display: flex; flex-direction: column; gap: var(--space-2); }
+.label { font-size: var(--text-sm); font-weight: 500; color: var(--color-text-secondary); }
+.hint { font-size: var(--text-xs); color: var(--color-text-muted); }
+.input, .select {
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-primary);
+  font-size: var(--text-sm);
+  font-family: var(--font-sans);
+  outline: none;
+  max-width: 300px;
+}
+.input:focus, .select:focus { border-color: var(--color-accent); }
+.slider { accent-color: var(--color-accent); max-width: 300px; }
+.infoRow { display: flex; gap: var(--space-4); align-items: center; }
+.infoLabel { font-size: var(--text-sm); color: var(--color-text-muted); width: 100px; }
+.infoValue { font-size: var(--text-sm); font-weight: 600; color: var(--color-text-primary); }
+.error {
+  padding: var(--space-3) var(--space-4);
+  background: rgba(239,68,68,0.08);
+  border: 1px solid rgba(239,68,68,0.25);
+  border-radius: var(--radius-md);
+  color: var(--color-bear);
+  font-size: var(--text-sm);
+}
+.success {
+  padding: var(--space-3) var(--space-4);
+  background: rgba(34,197,94,0.08);
+  border: 1px solid rgba(34,197,94,0.25);
+  border-radius: var(--radius-md);
+  color: var(--color-bull);
+  font-size: var(--text-sm);
+}
+.saveBtn {
+  padding: var(--space-3) var(--space-8);
+  background: var(--color-accent);
+  color: #0f172a;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
+  font-weight: 600;
+  cursor: pointer;
+  align-self: flex-start;
+}
+.saveBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── Tooltip / learning settings ── */
+.checkLabel {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+.checkbox { accent-color: var(--color-accent); cursor: pointer; width: 14px; height: 14px; }
+
+.pageTooltipGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+}
+
+/* ── Theme selector ── */
+.themeGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: var(--space-3);
+}
+
+.themeCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast);
+  user-select: none;
+}
+
+.themeCard:hover {
+  border-color: var(--color-accent);
+  transform: translateY(-1px);
+}
+
+.themeCardActive {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px var(--color-accent-dim), 0 0 16px var(--color-accent-dim);
+}
+
+.themeEmoji {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.themeName {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.themeDesc {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  line-height: 1.4;
+}
+
+.themeCategory {
+  font-size: var(--text-xs);
+  color: var(--color-accent);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 500;
+}
+
+.themeActiveBadge {
+  font-size: var(--text-xs);
+  color: var(--color-bull);
+  font-weight: 600;
+}
+
+/* Ghost mode danger zone */
+.dangerZone {
+  border-color: rgba(255,51,102,0.3);
+}
+
+.dangerTitle {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--color-bear);
+}
+
+.dangerDesc {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.ghostBtn {
+  padding: var(--space-3) var(--space-5);
+  background: transparent;
+  border: 1px solid var(--color-bear);
+  border-radius: var(--radius-md);
+  color: var(--color-bear);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  align-self: flex-start;
+}
+
+.ghostBtn:hover {
+  background: var(--color-bear-dim);
+}
+
+/* Ghost confirm modal */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modalBox {
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-bear);
+  border-radius: var(--radius-xl);
+  padding: var(--space-8);
+  max-width: 420px;
+  width: 90%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.modalTitle {
+  font-size: var(--text-xl);
+  font-weight: 700;
+  color: var(--color-bear);
+}
+
+.modalText {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+}
+
+.modalActions {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: flex-end;
+}
+
+.modalCancel {
+  padding: var(--space-2) var(--space-5);
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.modalConfirm {
+  padding: var(--space-2) var(--space-5);
+  background: var(--color-bear);
+  border: none;
+  border-radius: var(--radius-md);
+  color: #fff;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}

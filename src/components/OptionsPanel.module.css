@@ -1,0 +1,318 @@
+.panel {
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* ── Header ── */
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.title {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.symbol {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--color-ai);
+  background: var(--color-ai-dim);
+  border: 1px solid rgba(176,96,255,0.25);
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
+}
+.chainBtn {
+  margin-left: auto;
+  background: none;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), color var(--transition-fast);
+}
+.chainBtn:hover { border-color: var(--color-accent); color: var(--color-accent); }
+
+/* Moneyness tag */
+.moneynessTag {
+  font-size: var(--text-xs);
+  font-weight: 800;
+  padding: 1px 8px;
+  border-radius: var(--radius-full);
+  letter-spacing: 0.06em;
+}
+.mnITM { color: #00d4ff; background: rgba(0,212,255,0.1); border: 1px solid rgba(0,212,255,0.3); }
+.mnATM { color: #ffaa00; background: rgba(255,170,0,0.1); border: 1px solid rgba(255,170,0,0.3); }
+.mnOTM { color: #94a3b8; background: var(--color-bg-elevated); border: 1px solid var(--color-border); }
+.mnALL { color: var(--color-ai); background: var(--color-ai-dim); border: 1px solid rgba(176,96,255,0.3); }
+
+/* ── Controls ── */
+.controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--space-3);
+  align-items: end;
+}
+.field { display: flex; flex-direction: column; gap: var(--space-2); }
+.label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.daysLeft {
+  font-size: 0.6rem;
+  color: var(--color-warn);
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.select {
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-primary);
+  font-size: var(--text-xs);
+  font-family: var(--font-mono);
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+.select:focus { border-color: var(--color-accent); }
+
+/* Moneyness filter buttons */
+.moneynessGroup {
+  display: flex;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.mnBtn {
+  flex: 1;
+  padding: var(--space-2) 4px;
+  background: var(--color-bg-elevated);
+  border: none;
+  border-right: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.mnBtn:last-child { border-right: none; }
+.mnBtn:hover { color: var(--color-text-primary); }
+.mnBtnActive.mnITM { background: rgba(0,212,255,0.12); color: #00d4ff; }
+.mnBtnActive.mnATM { background: rgba(255,170,0,0.12); color: #ffaa00; }
+.mnBtnActive.mnOTM { background: var(--color-bg-surface); color: var(--color-text-secondary); }
+.mnBtnActive.mnALL { background: var(--color-ai-dim); color: var(--color-ai); }
+
+/* CE/PE toggle */
+.typeToggle {
+  display: flex;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.typeBtn {
+  flex: 1;
+  padding: var(--space-2) var(--space-2);
+  background: var(--color-bg-elevated);
+  border: none;
+  border-right: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  transition: all var(--transition-fast);
+}
+.typeBtn:last-child { border-right: none; }
+.typeBtnCE { background: rgba(0,255,136,0.1); color: var(--color-bull); }
+.typeBtnPE { background: rgba(255,51,102,0.1); color: var(--color-bear); }
+.typeHint { font-size: var(--text-xs); font-weight: 400; opacity: 0.7; }
+
+/* ── Option data panel ── */
+.optionData {
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.optDataGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-2);
+}
+.optDataItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: center;
+  text-align: center;
+}
+.optDataLabel {
+  font-size: 0.6rem;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+}
+.optDataValue {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+.optDataHighlight {
+  font-size: var(--text-base);
+  color: var(--color-accent);
+}
+
+/* Breakeven context */
+.breakeven {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border-subtle);
+  font-size: var(--text-xs);
+}
+.breakevenLabel { color: var(--color-text-muted); }
+.breakevenVal {
+  font-family: var(--font-mono);
+  font-weight: 800;
+  color: var(--color-text-primary);
+  font-size: var(--text-sm);
+}
+.breakevenMove { font-weight: 700; }
+.bull { color: var(--color-bull); }
+.bear { color: var(--color-bear); }
+
+/* ── Option chain ── */
+.chain {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.chainHeader {
+  display: grid;
+  grid-template-columns: 1fr 36px 36px 90px 36px 36px 1fr;
+  padding: var(--space-2) var(--space-2);
+  background: var(--color-bg-elevated);
+  border-bottom: 1px solid var(--color-border);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.chainColHdr {
+  text-align: center;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.chainStrikeHdr {
+  text-align: center;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+}
+
+.chainBody { display: flex; flex-direction: column; }
+
+.chainRow {
+  display: grid;
+  grid-template-columns: 1fr 36px 36px 90px 36px 36px 1fr;
+  border-bottom: 1px solid var(--color-border-subtle);
+  min-height: 32px;
+}
+.chainRow:last-child { border-bottom: none; }
+.chainAtm { background: rgba(255,170,0,0.04); }
+
+.chainCell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-1) var(--space-2);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+.chainCE:hover { background: rgba(0,255,136,0.08); }
+.chainPE:hover { background: rgba(255,51,102,0.08); }
+.chainITM { background: rgba(0,212,255,0.04); }
+.chainSelected { outline: 2px solid var(--color-accent); outline-offset: -2px; border-radius: var(--radius-sm); }
+
+.chainPremium {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+.chainGreek {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  color: var(--color-text-muted);
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.chainIVCell {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  color: var(--color-text-muted);
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chainStrikeVal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--color-text-secondary);
+  gap: 1px;
+}
+.chainAtmStrike { color: #ffaa00; }
+.atmTag {
+  font-size: 0.55rem;
+  font-weight: 700;
+  color: #ffaa00;
+  background: rgba(255,170,0,0.12);
+  padding: 0 3px;
+  border-radius: 2px;
+}

@@ -1,0 +1,769 @@
+.page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-base);
+  padding: var(--space-4);
+  /* Subtle radial glow behind the card */
+  background-image:
+    radial-gradient(ellipse 60% 50% at 50% 40%, rgba(0,212,255,0.06) 0%, transparent 70%),
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 100% 100%, 40px 40px, 40px 40px;
+}
+
+.card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-10) var(--space-8);
+  box-shadow: var(--shadow-lg), 0 0 40px rgba(0,212,255,0.08);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* ── Logo ── */
+.logoWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.logoIcon {
+  width: 56px;
+  height: 56px;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 20px rgba(0,212,255,0.15);
+}
+
+/* ── Title — NO gradient trick, plain colour so it's always visible ── */
+.title {
+  font-size: var(--text-2xl);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--color-text-primary);
+  text-align: center;
+  line-height: 1.2;
+}
+
+.titleAI {
+  color: var(--color-accent);
+  font-style: italic;
+}
+
+.subtitle {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  text-align: center;
+  margin-top: -var(--space-1);
+}
+
+/* ── Step badge ── */
+.stepBadge {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-accent);
+  background: var(--color-accent-dim);
+  border: 1px solid var(--color-border-glow);
+  padding: 3px 12px;
+  border-radius: var(--radius-full);
+}
+
+/* ── Error ── */
+.error {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-bear-dim);
+  border: 1px solid rgba(255,51,102,0.3);
+  border-radius: var(--radius-md);
+  color: var(--color-bear);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
+/* ── Form ── */
+.form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.fieldGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.label {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-muted);
+}
+
+.keyHint {
+  font-weight: 400;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.input {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-bg-input);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-primary);
+  font-size: var(--text-base);
+  font-family: var(--font-sans);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  outline: none;
+}
+.input:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-dim);
+}
+.input:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.keyInput {
+  font-family: var(--font-mono);
+  font-size: var(--text-xl);
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-align: center;
+}
+
+/* ── Buttons ── */
+.btn {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-accent);
+  color: #060b14;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
+  margin-top: var(--space-1);
+  letter-spacing: 0.02em;
+}
+.btn:hover:not(:disabled) {
+  opacity: 0.92;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(0,212,255,0.3);
+}
+.btn:active:not(:disabled) { transform: translateY(0); }
+.btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.backBtn {
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  text-align: center;
+  padding: var(--space-1);
+  transition: color var(--transition-fast);
+}
+.backBtn:hover { color: var(--color-text-secondary); }
+
+/* ── Step indicator ── */
+.stepIndicator {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.stepDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-border);
+  transition: all var(--transition-normal);
+}
+
+.stepActive {
+  width: 20px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--color-accent);
+  box-shadow: 0 0 8px var(--color-accent);
+  transition: all var(--transition-normal);
+}
+
+/* ── Version tag ── */
+.version {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  margin-top: var(--space-2);
+}
+
+/* ── Inline info tooltip (login page — no store dependency) ── */
+.infoWrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  margin-left: 5px;
+}
+
+.infoBtn {
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: 0.7rem;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+  transition: border-color var(--transition-fast), color var(--transition-fast);
+  flex-shrink: 0;
+}
+.infoBtn:hover  { border-color: var(--color-accent); color: var(--color-accent); }
+.infoBtn:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+
+.infoPanel {
+  position: absolute;
+  /* Appear above the button on the login card so it doesn't overflow */
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 280px;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3) var(--space-4);
+  box-shadow: var(--shadow-lg), 0 0 20px rgba(0,212,255,0.1);
+  z-index: 600;
+  animation: tipFadeIn 130ms ease;
+}
+@keyframes tipFadeIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(4px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* Arrow pointing down */
+.infoPanel::after {
+  content: '';
+  position: absolute;
+  bottom: -5px;
+  left: 50%;
+  transform: translateX(-50%) rotate(45deg);
+  width: 8px;
+  height: 8px;
+  background: var(--color-bg-elevated);
+  border-right: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.infoPanelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-2);
+}
+
+.infoPanelTitle {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--color-accent);
+}
+
+.infoPanelClose {
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: var(--text-base);
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  transition: color var(--transition-fast);
+}
+.infoPanelClose:hover { color: var(--color-text-primary); }
+
+.infoPanelLine {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+  margin: 0 0 var(--space-1);
+}
+.infoPanelLine:last-child { margin-bottom: 0; }
+
+.infoPanelHighlight {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-accent);
+  background: var(--color-accent-dim);
+  border: 1px solid var(--color-border-glow);
+  border-radius: var(--radius-sm);
+  padding: 2px 8px;
+  display: inline-block;
+  margin-top: 2px;
+  letter-spacing: 0.05em;
+}
+
+/* ── Key help text below input ── */
+.keyHelp {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.keyHelpLink {
+  background: none;
+  border: none;
+  color: var(--color-accent);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: opacity var(--transition-fast);
+}
+.keyHelpLink:hover { opacity: 0.8; }
+
+/* Ensure panel doesn't overflow on very small screens */
+@media (max-width: 380px) {
+  .infoPanel {
+    width: 240px;
+    left: 0;
+    transform: none;
+  }
+  .infoPanel::after { left: 12px; transform: rotate(45deg); }
+  @keyframes tipFadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+}
+
+/* ── Expanded key help panel ── */
+.keyHelpPanel {
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border-glow);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  animation: tipFadeIn 130ms ease;
+}
+
+.keyHelpPanel p {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  margin: 0;
+  line-height: 1.6;
+}
+.keyHelpPanel strong { color: var(--color-text-primary); }
+
+.keyHelpList {
+  list-style: disc;
+  padding-left: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.keyHelpList li {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+}
+.keyHelpList strong { color: var(--color-text-primary); }
+
+.keyHelpCode {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-accent);
+  background: var(--color-accent-dim);
+  border: 1px solid var(--color-border-glow);
+  border-radius: var(--radius-sm);
+  padding: 1px 6px;
+}
+
+.keyHelpNote {
+  font-size: var(--text-xs);
+  color: var(--color-warn);
+  margin: 0;
+}
+
+/* ── Key label row (label + Get Key button side by side) ── */
+.keyLabelRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+/* ── Get Key trigger button ── */
+.keygenTrigger {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  background: rgba(245,158,11,0.1);
+  border: 1px solid rgba(245,158,11,0.35);
+  border-radius: var(--radius-full);
+  color: #f59e0b;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.keygenTrigger:hover { background: rgba(245,158,11,0.18); border-color: #f59e0b; }
+.keygenTriggerActive { background: rgba(245,158,11,0.2); border-color: #f59e0b; }
+.keygenTriggerLabel { font-size: var(--text-xs); }
+.keygenTriggerIcon  { font-size: 0.55rem; opacity: 0.7; }
+
+/* ── Inline keygen panel ── */
+.keygenPanel {
+  background: var(--color-bg-elevated);
+  border: 1px solid rgba(245,158,11,0.3);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+  animation: panelSlideDown 180ms ease;
+  box-shadow: 0 4px 20px rgba(245,158,11,0.08);
+}
+@keyframes panelSlideDown {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.keygenPanelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.keygenPanelTitle {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: #f59e0b;
+}
+.keygenPanelClose {
+  background: none; border: none;
+  color: var(--color-text-muted); font-size: var(--text-base);
+  cursor: pointer; padding: 0; line-height: 1;
+  transition: color var(--transition-fast);
+}
+.keygenPanelClose:hover { color: var(--color-text-primary); }
+
+.keygenPanelDesc {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  margin: 0;
+  line-height: 1.6;
+}
+.keygenPanelWarn {
+  color: var(--color-warn);
+  display: block;
+  margin-top: 4px;
+}
+.keygenPanelWarn strong { color: var(--color-text-primary); }
+
+.keygenError {
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bear-dim);
+  border: 1px solid rgba(255,51,102,0.3);
+  border-radius: var(--radius-md);
+  color: var(--color-bear);
+  font-size: var(--text-xs);
+}
+
+.keygenRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.keygenLabel {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.keygenSelect {
+  padding: 4px 8px;
+  background: var(--color-bg-input);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-primary);
+  font-size: var(--text-xs);
+  outline: none;
+  cursor: pointer;
+}
+.keygenSelect:focus { border-color: #f59e0b; }
+
+.keygenGenerateBtn {
+  flex: 1;
+  padding: var(--space-2) var(--space-3);
+  background: #f59e0b;
+  color: #0f172a;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  transition: opacity var(--transition-fast);
+  white-space: nowrap;
+}
+.keygenGenerateBtn:hover:not(:disabled) { opacity: 0.9; }
+.keygenGenerateBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.spinner {
+  width: 11px; height: 11px;
+  border: 2px solid rgba(0,0,0,0.2);
+  border-top-color: #0f172a;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  display: inline-block;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Key generated result ── */
+.keygenSuccess {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: rgba(0,255,136,0.08);
+  border: 1px solid rgba(0,255,136,0.2);
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+}
+.keygenSuccess > span:first-child { color: var(--color-bull); font-size: var(--text-base); flex-shrink: 0; }
+.keygenSuccess > div { flex: 1; }
+.keygenSuccess strong { color: var(--color-bull); display: block; }
+.keygenSuccess p { color: var(--color-text-muted); margin: 1px 0 0; }
+
+.keygenCountdown {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--color-warn);
+  flex-shrink: 0;
+  align-self: center;
+}
+
+.keygenDisplay {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  flex-wrap: wrap;
+}
+.keygenValue {
+  font-family: var(--font-mono);
+  font-size: var(--text-lg);
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  color: var(--color-accent);
+  user-select: none;
+}
+.keygenDisplayBtns { display: flex; gap: var(--space-1); }
+
+.keygenRevealBtn {
+  padding: 2px 8px;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  user-select: none;
+  transition: all var(--transition-fast);
+}
+.keygenRevealBtn:hover { border-color: var(--color-accent); color: var(--color-accent); }
+
+.keygenCopyBtn {
+  padding: 2px 8px;
+  background: var(--color-accent-dim);
+  border: 1px solid var(--color-border-glow);
+  border-radius: var(--radius-sm);
+  color: var(--color-accent);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.keygenCopied { background: var(--color-bull-dim); border-color: rgba(0,255,136,0.3); color: var(--color-bull); }
+
+.keygenExpiry {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  margin: 0;
+  text-align: center;
+}
+
+.keygenUseBtn {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-accent);
+  color: #0f172a;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity var(--transition-fast);
+}
+.keygenUseBtn:hover { opacity: 0.9; }
+
+/* ── Key input filled state ── */
+.keyInputFilled {
+  border-color: rgba(0,255,136,0.4);
+  box-shadow: 0 0 0 3px rgba(0,255,136,0.08);
+}
+
+/* ── Key help line ── */
+.keyHelp {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.keyHelpLink {
+  background: none; border: none;
+  color: var(--color-accent); font-size: var(--text-xs);
+  cursor: pointer; padding: 0;
+  text-decoration: underline; text-underline-offset: 2px;
+  transition: opacity var(--transition-fast);
+}
+.keyHelpLink:hover { opacity: 0.8; }
+
+/* ── Mode tabs inside keygen panel ── */
+.keygenModeTabs {
+  display: flex;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.keygenModeTab {
+  flex: 1;
+  padding: var(--space-1) var(--space-2);
+  background: var(--color-bg-input);
+  border: none;
+  border-right: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.keygenModeTab:last-child { border-right: none; }
+.keygenModeTab:hover { background: var(--color-bg-elevated); color: var(--color-text-primary); }
+.keygenModeTabActive {
+  background: rgba(245,158,11,0.12);
+  color: #f59e0b;
+  font-weight: 700;
+}
+
+/* ── Credential fields inside keygen panel ── */
+.keygenCredFields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.keygenField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.keygenFieldLabel {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.keygenInput {
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg-input);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-primary);
+  font-size: var(--text-sm);
+  font-family: var(--font-sans);
+  outline: none;
+  width: 100%;
+  transition: border-color var(--transition-fast);
+}
+.keygenInput:focus { border-color: #f59e0b; }
+
+.keygenPassWrap { position: relative; display: flex; }
+.keygenPassWrap .keygenInput { padding-right: 36px; }
+.keygenEyeBtn {
+  position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+  background: none; border: none; cursor: pointer;
+  font-size: 0.85rem; color: var(--color-text-muted); padding: 2px;
+}
+.keygenEyeBtn:hover { color: var(--color-text-primary); }
+
+/* ── Step 1 keygen link ── */
+.step1KeygenWrap {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--space-1);
+}
+.step1KeygenLink {
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.step1KeygenLink:hover {
+  color: #f59e0b;
+  background: rgba(245,158,11,0.08);
+}

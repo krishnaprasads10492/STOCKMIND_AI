@@ -1,0 +1,31 @@
+.banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-6);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.warning {
+  background: rgba(234, 179, 8, 0.08);
+  border-bottom: 1px solid rgba(234, 179, 8, 0.25);
+  color: #fbbf24;
+}
+
+.critical {
+  background: rgba(239, 68, 68, 0.08);
+  border-bottom: 1px solid rgba(239, 68, 68, 0.25);
+  color: var(--color-bear);
+}
+
+.icon {
+  flex-shrink: 0;
+}
+
+.inline {
+  border: none;
+  padding: 0;
+  background: none;
+  font-size: var(--text-xs);
+}

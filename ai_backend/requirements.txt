@@ -1,0 +1,48 @@
+# StockMind AI — Python ML Backend
+# Install: pip install -r requirements.txt
+#
+# Core API
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+pydantic==2.9.2
+
+# Data
+numpy==1.26.4
+pandas==2.2.3
+scipy==1.14.1
+
+# ML — Ensemble models
+scikit-learn==1.5.2
+lightgbm==4.5.0
+xgboost==2.1.3
+
+# Deep learning (optional — comment out if GPU not available)
+# torch==2.4.1
+# tensorflow==2.17.0
+
+# Time-series
+statsmodels==0.14.4            # ARIMA, GARCH
+
+# Options / Finance math
+numpy-financial==1.0.0
+
+# Sentiment (optional — downloads ~500MB model on first run)
+# transformers==4.46.3         # FinBERT
+# torch==2.4.1
+
+# Technical indicators
+ta==0.11.0                     # RSI, MACD, ATR, Bollinger, etc.
+
+# HTTP client (for fetching market data directly from AI backend)
+httpx==0.27.2
+
+# Utilities
+python-dotenv==1.0.1
+joblib==1.4.2                  # model serialisation
+
+# Advanced ML (optional — for production model training)
+# catboost==1.2.7              # CatBoost gradient boosting
+# optuna==3.6.1                # Bayesian hyperparameter optimization
+# shap==0.45.1                 # SHAP explainability
+# prophet==1.1.5               # Facebook Prophet for seasonality
+# pykalman==0.9.7              # Kalman filter for regime detection
