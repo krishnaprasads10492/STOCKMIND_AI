@@ -12,11 +12,14 @@ import { IndicesTicker } from './IndicesTicker.jsx'
 import { KeygenModal } from './KeygenModal.jsx'
 import { ChangePasswordModal } from './ChangePasswordModal.jsx'
 import { VoiceCommandIndicator } from './VoiceCommandIndicator.jsx'
+import { DangerSignalBanner } from './DangerSignalBanner.jsx'
 import styles from './AppShell.module.css'
 
 const NAV_ITEMS = [
   { to: '/dashboard',             label: 'Dashboard',          icon: '⊞' },
   { to: '/predictions',           label: 'Predictions',        icon: '🎯' },
+  { to: '/ami',                   label: 'AMI',                icon: '🧬' },
+  { to: '/multibagger',           label: 'Multibagger',        icon: '🚀' },
   { to: '/strategy-intelligence', label: 'AI Intelligence',    icon: '🧠' },
   { to: '/jarvis',                label: 'JARVIS',             icon: '🤖' },
   { to: '/backtest',              label: 'Backtest',           icon: '📈' },
@@ -285,6 +288,11 @@ export function AppShell() {
       {/* Voice command indicator — super-admin only, floating */}
       <ErrorBoundary fallbackMessage="">
         <VoiceCommandIndicator onCommand={handleVoiceCommand} />
+      </ErrorBoundary>
+
+      {/* Danger signal banner — fixed top, non-dismissible */}
+      <ErrorBoundary fallbackMessage="">
+        <DangerSignalBanner />
       </ErrorBoundary>
     </div>
   )

@@ -147,6 +147,15 @@ def generate_signals(params: dict) -> list[dict]:
     return _spot_signals(params)
 
 
+def _signal_count(params: dict) -> int:
+    """Return user-requested signal count, clamped to 1–50. Defaults to 16."""
+    n = params.get("signalCount") or params.get("count") or 16
+    try:
+        return max(1, min(50, int(n)))
+    except (TypeError, ValueError):
+        return 16
+
+
 # ── Spot signals ──────────────────────────────────────────────────────────────
 
 def _spot_signals(params: dict) -> list[dict]:
@@ -164,8 +173,9 @@ def _spot_signals(params: dict) -> list[dict]:
     if not is_real:
         logger.info(f"[Dispatcher] {symbol}: using mock OHLCV for features")
 
+    count = _signal_count(params)
     signals = []
-    for i in range(16):
+    for i in range(count):
         result = MODEL_REGISTRY.ensemble_predict(
             features + np.random.normal(0, 0.01, len(features))
         )
@@ -187,7 +197,7 @@ def _spot_signals(params: dict) -> list[dict]:
         signals.append(_build_signal(
             i + 1, prob, "LONG" if is_long else "SHORT",
             entry, sl, t1, t2, t3, capital, risk_pct, reasons,
-            {"instrType": "spot", "dataSource": "real" if is_real else "mock"},
+            {"instrType": "spot", "spotPrice": round(base, 2), "dataSource": "real" if is_real else "mock"},
         ))
 
     signals.sort(key=lambda s: s["probability"], reverse=True)
@@ -217,8 +227,9 @@ def _futures_signals(params: dict) -> list[dict]:
     df, is_real = get_ohlcv(params)
     features = compute_features(df)
 
+    count = _signal_count(params)
     signals = []
-    for i in range(16):
+    for i in range(count):
         result = MODEL_REGISTRY.ensemble_predict(
             features + np.random.normal(0, 0.01, len(features))
         )
@@ -246,7 +257,8 @@ def _futures_signals(params: dict) -> list[dict]:
             i + 1, prob, "LONG" if is_long else "SHORT",
             entry, sl, t1, t2, t3, capital, risk_pct, reasons,
             {
-                "instrType": "futures", "lotSize": lot_size, "lotCount": lots,
+                "instrType": "futures", "spotPrice": round(base, 2),
+                "lotSize": lot_size, "lotCount": lots,
                 "basis": round(basis, 2), "maxRisk": round(max_risk_lots),
                 "daysLeft": days_left, "series": series,
                 "dataSource": "real" if is_real else "mock",
@@ -296,8 +308,9 @@ def _options_signals(params: dict) -> list[dict]:
     z_score    = abs(idx_move) / (period_vol + 1e-9)
     prob_reach = float(np.clip(1 - min(0.95, z_score * 0.28), 0.10, 0.90))
 
+    count = _signal_count(params)
     signals = []
-    for i in range(16):
+    for i in range(count):
         result = MODEL_REGISTRY.ensemble_predict(
             features + np.random.normal(0, 0.01, len(features))
         )
@@ -314,7 +327,7 @@ def _options_signals(params: dict) -> list[dict]:
         max_risk_lots = (entry - sl) * lot_size * lots
 
         reasons = [
-            f"{opt_type} {strike:.0f} | IV: {iv*100:.1f}% | {days_left}d to expiry",
+            f"{opt_type} {strike:.0f} | Spot: ₹{base:.0f} | IV: {iv*100:.1f}% | {days_left}d to expiry",
             f"Δ {greeks['delta']:.3f} | Θ {greeks['theta']:.2f}/day | ν {greeks['vega']:.2f}",
             f"Index needs {idx_move:+.0f} pts → breakeven {breakeven:.0f}",
             f"Prob reach breakeven: {int(prob_reach*100)}%",
@@ -325,7 +338,8 @@ def _options_signals(params: dict) -> list[dict]:
             i + 1, prob, "LONG" if opt_type == "CE" else "SHORT",
             entry, sl, t1, t2, t3, capital, risk_pct, reasons,
             {
-                "instrType": "options", "optType": opt_type, "strike": strike,
+                "instrType": "options", "spotPrice": round(base, 2),
+                "optType": opt_type, "strike": strike,
                 "iv": round(iv * 100, 1), **greeks,
                 "lotSize": lot_size, "lotCount": lots,
                 "maxRisk": round(max_risk_lots),
@@ -425,10 +439,11 @@ def _deriv_recommendations(params: dict) -> list[dict]:
             })
 
     candidates.sort(key=lambda c: c["score"], reverse=True)
-    top16 = candidates[:16]
+    count = _signal_count(params)
+    top_n = candidates[:count]
 
     signals = []
-    for i, c in enumerate(top16):
+    for i, c in enumerate(top_n):
         lots = max(1, int((capital * risk_pct / 100) / (abs(c["entry"] - c["sl"]) * c["lotSize"] + 1e-9)))
         signals.append(_build_signal(
             i + 1, c["prob"],
@@ -437,6 +452,7 @@ def _deriv_recommendations(params: dict) -> list[dict]:
             capital, risk_pct, c["reasons"],
             {
                 "instrType":  c["instrType"],
+                "spotPrice":  round(base, 2),
                 "derivLabel": c["label"],
                 "symbol":     c["symbol"],
                 "optType":    c.get("optType"),

@@ -30,6 +30,7 @@ export function PredictionInputPanel({ defaultCapital, defaultRisk, onGenerate, 
   const [riskPct,    setRiskPct]    = useState(defaultRisk)
   const [direction,  setDirection]  = useState('both')
   const [minGrade,   setMinGrade]   = useState('C')
+  const [signalCount, setSignalCount] = useState(16)
   const [instrType,  setInstrType]  = useState('futures') // futures | options
   const [optionMeta, setOptionMeta] = useState(null)
   const [futuresMeta, setFuturesMeta] = useState(null)
@@ -48,6 +49,7 @@ export function PredictionInputPanel({ defaultCapital, defaultRisk, onGenerate, 
       exchange:  activeMod.exchange,
       capital,
       riskPct,
+      signalCount,
       basePrice: optionMeta?.basePrice ?? futuresMeta?.spotPrice ?? symbolMeta.basePrice,
       direction,
       minGrade,
@@ -173,6 +175,27 @@ export function PredictionInputPanel({ defaultCapital, defaultRisk, onGenerate, 
             <option value="D">All signals</option>
           </select>
         </div>
+
+        {/* Signal count */}
+        <div className={styles.field}>
+          <label className={styles.fieldLabel} htmlFor="pred-count">
+            Signals to generate
+            <span className={styles.fieldHint}> — 1 to 50</span>
+          </label>
+          <div className={styles.sliderRow}>
+            <input
+              id="pred-count"
+              type="range"
+              min={1} max={50} step={1}
+              value={signalCount}
+              onChange={e => setSignalCount(Number(e.target.value))}
+              className={styles.slider}
+              disabled={loading}
+              aria-valuetext={`${signalCount} signals`}
+            />
+            <span className={styles.sliderVal}>{signalCount}</span>
+          </div>
+        </div>
       </div>
 
       {/* ── F&O: Futures vs Options toggle ── */}
@@ -235,7 +258,7 @@ export function PredictionInputPanel({ defaultCapital, defaultRisk, onGenerate, 
         <button className={styles.generateBtn} type="submit" disabled={loading}>
           {loading
             ? <><span className={styles.spinner} aria-hidden="true" /> Generating…</>
-            : '⚡ Generate 16 Signals'
+            : `⚡ Generate ${signalCount} Signal${signalCount !== 1 ? 's' : ''}`
           }
         </button>
       </div>

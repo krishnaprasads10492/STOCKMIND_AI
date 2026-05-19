@@ -16,6 +16,8 @@ const BacktestPage    = lazy(() => import('@pages/Backtest/BacktestPage.jsx'))
 const StrategiesPage  = lazy(() => import('@pages/Strategies/StrategiesPage.jsx'))
 const StrategyIntelligencePage = lazy(() => import('@pages/StrategyIntelligence/StrategyIntelligencePage.jsx'))
 const JarvisPage      = lazy(() => import('@pages/Jarvis/JarvisPage.jsx'))
+const AMIPage         = lazy(() => import('@pages/AMI/AMIPage.jsx'))
+const MultibaggerPage = lazy(() => import('@pages/Multibagger/MultibaggerPage.jsx'))
 
 function PageLoader() {
   return (
@@ -68,6 +70,12 @@ export default function App() {
             } />
             <Route path="/jarvis" element={
               <Suspense fallback={<PageLoader />}><JarvisPage /></Suspense>
+            } />
+            <Route path="/ami" element={
+              <Suspense fallback={<PageLoader />}><AMIPage /></Suspense>
+            } />
+            <Route path="/multibagger" element={
+              <Suspense fallback={<PageLoader />}><MultibaggerPage /></Suspense>
             } />
             <Route path="/admin" element={
               <ProtectedRoute adminOnly>

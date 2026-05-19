@@ -25,7 +25,16 @@ import selfOptimizerRoutes from './routes/selfOptimizer.js'
 import jarvisRoutes        from './routes/jarvis.js'
 import historicalRoutes    from './routes/historical.js'
 import ghostRoutes         from './routes/ghost.js'
+import amiRoutes           from './routes/ami.js'
+import derivativesRoutes   from './routes/derivatives.js'
+import multibaggerRoutes   from './routes/multibagger.js'
 import { startOutcomeValidator, getValidatorStatus, addSSEClient, startCleanupScheduler } from './services/outcomeValidator.js'
+import { rebuildAMIIndex } from './services/amiStore.js'
+import {
+  startAIGrowthWorker, stopAIGrowthWorker, pauseAIGrowthWorker, resumeAIGrowthWorker,
+  getGrowthWorkerStatus, getUpgradeProposals, approveProposal, dismissProposal,
+  addGrowthWorkerSSEClient,
+} from './services/aiGrowthWorker.js'
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 const DIST_DIR  = path.resolve(__dirname, '../dist')
@@ -152,6 +161,9 @@ app.use('/api/self-optimizer', selfOptimizerRoutes)
 app.use('/api/jarvis',         jarvisRoutes)
 app.use('/api/historical',     historicalRoutes)
 app.use('/api/ghost',          ghostRoutes)
+app.use('/api/ami',            amiRoutes)
+app.use('/api/derivatives',    derivativesRoutes)
+app.use('/api/multibagger',    multibaggerRoutes)
 
 // Outcome validator status
 app.get('/api/validator/status', (req, res) => res.json(getValidatorStatus()))
@@ -177,6 +189,51 @@ app.get('/api/validator/events', (req, res) => {
   res.on('close', () => clearInterval(ping))
 })
 
+// ── AI Growth Worker API ──────────────────────────────────────────────────────
+app.get('/api/growth-worker/status', (req, res) => res.json(getGrowthWorkerStatus()))
+app.get('/api/growth-worker/proposals', (req, res) => {
+  const limit = Math.min(Number(req.query.limit ?? 20), 50)
+  res.json({ proposals: getUpgradeProposals(limit) })
+})
+app.post('/api/growth-worker/start', (req, res) => {
+  startAIGrowthWorker()
+  res.json({ ok: true, status: getGrowthWorkerStatus() })
+})
+app.post('/api/growth-worker/stop', (req, res) => {
+  stopAIGrowthWorker()
+  res.json({ ok: true, status: getGrowthWorkerStatus() })
+})
+app.post('/api/growth-worker/pause', (req, res) => {
+  pauseAIGrowthWorker()
+  res.json({ ok: true, status: getGrowthWorkerStatus() })
+})
+app.post('/api/growth-worker/resume', (req, res) => {
+  resumeAIGrowthWorker()
+  res.json({ ok: true, status: getGrowthWorkerStatus() })
+})
+app.post('/api/growth-worker/proposals/:id/approve', (req, res) => {
+  const ok = approveProposal(req.params.id)
+  res.json({ ok })
+})
+app.post('/api/growth-worker/proposals/:id/dismiss', (req, res) => {
+  const ok = dismissProposal(req.params.id)
+  res.json({ ok })
+})
+// SSE stream for growth worker events
+app.get('/api/growth-worker/events', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream')
+  res.setHeader('Cache-Control', 'no-cache')
+  res.setHeader('Connection', 'keep-alive')
+  res.setHeader('X-Accel-Buffering', 'no')
+  res.flushHeaders()
+  res.write('event: connected\ndata: {"status":"connected"}\n\n')
+  const ping = setInterval(() => {
+    try { res.write(':ping\n\n') } catch { clearInterval(ping) }
+  }, 30_000)
+  addGrowthWorkerSSEClient(res)
+  res.on('close', () => clearInterval(ping))
+})
+
 // ── Serve built frontend (production / no-source-code mode) ──────────────────
 // In dev mode Vite serves the frontend separately on :3000.
 // In production (dist/ exists), Express serves everything on one port.
@@ -196,8 +253,13 @@ bootstrap().then(() => {
   app.listen(PORT, () => {
     console.log(`[StockMind AI] Backend → http://localhost:${PORT}`)
     startOutcomeValidator()
+    rebuildAMIIndex()
     // Cleanup scheduler: default 30-day retention, runs every 24h
     const retentionDays = Number(process.env.CLEANUP_RETENTION_DAYS ?? 30)
     startCleanupScheduler(retentionDays, 24)
+    // AI Growth Worker — auto-start if env flag set (user can toggle in Settings)
+    if (process.env.AI_GROWTH_WORKER_ENABLED === 'true') {
+      startAIGrowthWorker()
+    }
   })
 })

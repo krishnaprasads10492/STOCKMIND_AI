@@ -1,0 +1,38 @@
+.container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  pointer-events: none;
+}
+
+.banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-5);
+  background: #cc0022;
+  color: #ffffff;
+  font-size: var(--text-sm);
+  pointer-events: auto;
+  animation: slideDown 300ms ease;
+}
+
+@keyframes slideDown {
+  from { transform: translateY(-100%); opacity: 0; }
+  to   { transform: translateY(0);     opacity: 1; }
+}
+
+.icon { font-size: 1.2rem; flex-shrink: 0; }
+
+.content { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+
+.title { font-weight: 700; font-size: var(--text-sm); }
+
+.detail { font-size: var(--text-xs); opacity: 0.9; }
+
+.time { font-size: var(--text-xs); opacity: 0.8; white-space: nowrap; font-family: var(--font-mono); }

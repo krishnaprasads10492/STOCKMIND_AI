@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuthStore } from '@store/authStore.js'
 import { useUiPrefsStore } from '@store/uiPrefsStore.js'
 import { useThemeStore } from '@store/themeStore.js'
 import { updatePreferencesApi } from '@services/backendClient.js'
+import { apiFetch } from '@services/apiClient.js'
 import { activateGhostMode, wipeServerData } from '@utils/ghostMode.js'
 import { THEMES, THEME_KEYS } from '@utils/themes.js'
 import styles from './SettingsPage.module.css'
@@ -27,6 +28,59 @@ export default function SettingsPage() {
   const [error,    setError]    = useState('')
   const [showGhostConfirm, setShowGhostConfirm] = useState(false)
   const [ghostLoading,     setGhostLoading]     = useState(false)
+
+  // ── AI Growth Worker state ──
+  const [workerStatus,  setWorkerStatus]  = useState(null)
+  const [workerLoading, setWorkerLoading] = useState(false)
+  const [proposals,     setProposals]     = useState([])
+
+  useEffect(() => {
+    let cancelled = false
+    async function fetchWorkerStatus() {
+      try {
+        const res = await apiFetch('/api/growth-worker/status')
+        if (!cancelled && res.ok) {
+          const data = await res.json()
+          setWorkerStatus(data)
+        }
+      } catch { /* backend may not be running */ }
+    }
+    async function fetchProposals() {
+      try {
+        const res = await apiFetch('/api/growth-worker/proposals?limit=10')
+        if (!cancelled && res.ok) {
+          const data = await res.json()
+          setProposals(data.proposals ?? [])
+        }
+      } catch { /* non-fatal */ }
+    }
+    fetchWorkerStatus()
+    fetchProposals()
+    const interval = setInterval(() => { fetchWorkerStatus(); fetchProposals() }, 15_000)
+    return () => { cancelled = true; clearInterval(interval) }
+  }, [])
+
+  async function toggleWorker() {
+    if (!workerStatus) return
+    setWorkerLoading(true)
+    try {
+      const action = workerStatus.running ? 'stop' : 'start'
+      const res = await apiFetch(`/api/growth-worker/${action}`, { method: 'POST' })
+      if (res.ok) {
+        const data = await res.json()
+        setWorkerStatus(data.status)
+      }
+    } catch { /* non-fatal */ } finally {
+      setWorkerLoading(false)
+    }
+  }
+
+  async function handleProposalAction(id, action) {
+    try {
+      await apiFetch(`/api/growth-worker/proposals/${id}/${action}`, { method: 'POST' })
+      setProposals(prev => prev.map(p => p.id === id ? { ...p, status: action === 'approve' ? 'approved' : 'dismissed' } : p))
+    } catch { /* non-fatal */ }
+  }
 
   async function handleSave(e) {
     e.preventDefault()
@@ -244,9 +298,110 @@ export default function SettingsPage() {
         </button>
       </form>
 
+      {/* ── AI Growth Worker ── */}
+      <section className={styles.section}>
+        <h2 className={styles.sectionTitle}>🧬 AI Background Growth Worker</h2>
+        <p className={styles.hint}>
+          Runs in the background — even when the app is out of focus. Continuously collects market data,
+          evaluates strategy accuracy, and proposes algorithm upgrades to improve prediction quality over time.
+        </p>
+
+        <div className={styles.workerStatus}>
+          <div className={styles.workerIndicator}>
+            <span
+              className={`${styles.workerDot} ${workerStatus?.running && !workerStatus?.paused ? styles.workerDotActive : styles.workerDotIdle}`}
+              aria-hidden="true"
+            />
+            <span className={styles.workerLabel}>
+              {workerStatus == null
+                ? 'Checking…'
+                : workerStatus.running && !workerStatus.paused
+                  ? 'Running'
+                  : workerStatus.paused
+                    ? 'Paused'
+                    : 'Stopped'}
+            </span>
+          </div>
+          {workerStatus?.cycleCount > 0 && (
+            <span className={styles.hint}>
+              {workerStatus.cycleCount} cycle{workerStatus.cycleCount !== 1 ? 's' : ''} completed
+              {workerStatus.lastCycleAt && ` · last ${new Date(workerStatus.lastCycleAt).toLocaleTimeString()}`}
+            </span>
+          )}
+          {workerStatus?.lastError && (
+            <span className={styles.workerError}>⚠ {workerStatus.lastError}</span>
+          )}
+        </div>
+
+        <div className={styles.workerActions}>
+          <button
+            type="button"
+            className={`${styles.workerBtn} ${workerStatus?.running ? styles.workerBtnStop : styles.workerBtnStart}`}
+            onClick={toggleWorker}
+            disabled={workerLoading || workerStatus == null}
+          >
+            {workerLoading
+              ? '…'
+              : workerStatus?.running
+                ? '⏹ Stop Worker'
+                : '▶ Start Worker'}
+          </button>
+          {workerStatus?.running && !workerStatus?.paused && (
+            <button
+              type="button"
+              className={styles.workerBtnPause}
+              onClick={() => apiFetch('/api/growth-worker/pause', { method: 'POST' }).then(() => setWorkerStatus(s => ({ ...s, paused: true })))}
+            >
+              ⏸ Pause
+            </button>
+          )}
+          {workerStatus?.running && workerStatus?.paused && (
+            <button
+              type="button"
+              className={styles.workerBtnStart}
+              onClick={() => apiFetch('/api/growth-worker/resume', { method: 'POST' }).then(() => setWorkerStatus(s => ({ ...s, paused: false })))}
+            >
+              ▶ Resume
+            </button>
+          )}
+        </div>
+
+        {workerStatus?.proposalsPending > 0 && (
+          <div className={styles.proposalsBadge}>
+            🔔 {workerStatus.proposalsPending} upgrade proposal{workerStatus.proposalsPending !== 1 ? 's' : ''} pending review
+          </div>
+        )}
+
+        {proposals.length > 0 && (
+          <div className={styles.proposalsList}>
+            <p className={styles.label}>Recent upgrade proposals</p>
+            {proposals.map(p => (
+              <div key={p.id} className={`${styles.proposal} ${p.status !== 'pending' ? styles.proposalResolved : ''}`}>
+                <div className={styles.proposalHead}>
+                  <span className={`${styles.proposalPriority} ${p.priority === 'high' ? styles.proposalHigh : styles.proposalMed}`}>
+                    {p.priority === 'high' ? '🔴' : '🟡'} {p.priority}
+                  </span>
+                  <span className={styles.proposalSymbol}>{p.symbol}</span>
+                  <span className={styles.hint}>{p.accuracyPct != null ? `${p.accuracyPct}% accuracy` : ''}</span>
+                </div>
+                <p className={styles.proposalText}>{p.suggestion}</p>
+                {p.status === 'pending' && (
+                  <div className={styles.proposalActions}>
+                    <button type="button" className={styles.proposalApprove} onClick={() => handleProposalAction(p.id, 'approve')}>✓ Approve</button>
+                    <button type="button" className={styles.proposalDismiss} onClick={() => handleProposalAction(p.id, 'dismiss')}>✗ Dismiss</button>
+                  </div>
+                )}
+                {p.status !== 'pending' && (
+                  <span className={styles.proposalStatusBadge}>{p.status === 'approved' ? '✓ Approved' : '✗ Dismissed'}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
       {/* Ghost Mode — super-admin only */}
-      {isSuperAdmin && (
-        <section className={`${styles.section} ${styles.dangerZone}`}>
+      {isSuperAdmin && (        <section className={`${styles.section} ${styles.dangerZone}`}>
           <h2 className={styles.dangerTitle}>👻 Ghost Mode</h2>
           <p className={styles.dangerDesc}>
             Zero-trace wipe of all app data from this device. Clears localStorage, sessionStorage,

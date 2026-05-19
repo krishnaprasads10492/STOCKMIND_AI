@@ -16,12 +16,134 @@
 
 import { listSecure, readSecure, writeSecure } from '../storage/fileStore.js'
 import { computeAccuracy, saveDeviationRecord } from './predictionStore.js'
+import { writeAMI } from './amiStore.js'
 
-const AI_BACKEND_URL = process.env.AI_BACKEND_URL ?? 'http://localhost:8001'
-const FINNHUB_KEY    = process.env.FINNHUB_KEY ?? process.env.VITE_FINNHUB_KEY ?? ''
-const POLL_INTERVAL  = 2_400   // 2.4 seconds
-const CACHE_TTL      = 2_400
-const MAX_AGE_DAYS   = 30
+const AI_BACKEND_URL     = process.env.AI_BACKEND_URL ?? 'http://localhost:8001'
+const FINNHUB_KEY        = process.env.FINNHUB_KEY ?? process.env.VITE_FINNHUB_KEY ?? ''
+const POLL_INTERVAL      = 2_400   // 2.4 seconds
+const CACHE_TTL          = 2_400
+const MAX_AGE_DAYS       = 30
+const DANGER_MULTIPLIER  = Number(process.env.DANGER_SIGNAL_MULTIPLIER ?? 1.5)
+
+// ── Danger signal state ───────────────────────────────────────────────────────
+// Tracks which prediction IDs have already fired a danger signal this session
+// so we don't duplicate. Also tracks which are in "danger" state for recovery.
+const dangerFiredIds    = new Set()   // IDs that have fired danger signal
+const dangerActiveIds   = new Set()   // IDs currently in danger state (for recovery)
+const dangerRetryQueue  = []          // recalibration requests to retry
+
+// ── Danger signal detection (runs in background, never blocks polling) ────────
+
+function checkDangerSignal(pred, currentPrice) {
+  if (!pred.entryPrice || !pred.stopLoss) return null
+  const isLong = pred.type === 'LONG'
+  const slDistance = Math.abs(pred.entryPrice - pred.stopLoss)
+  if (slDistance === 0) return null
+
+  const threshold = isLong
+    ? pred.stopLoss - slDistance * (DANGER_MULTIPLIER - 1)
+    : pred.stopLoss + slDistance * (DANGER_MULTIPLIER - 1)
+
+  const isDanger = isLong
+    ? currentPrice <= threshold
+    : currentPrice >= threshold
+
+  if (!isDanger) return null
+
+  const deviationPct = ((currentPrice - pred.entryPrice) / pred.entryPrice) * 100
+  return {
+    predictionId:    pred.id,
+    symbol:          pred.symbol,
+    instrType:       pred.instrType ?? 'spot',
+    entryPrice:      pred.entryPrice,
+    stopLoss:        pred.stopLoss,
+    livePrice:       currentPrice,
+    deviationPct:    Math.round(deviationPct * 100) / 100,
+    deviationMultiplier: DANGER_MULTIPLIER,
+    grade:           pred.grade ?? 'C',
+    timestamp:       Date.now(),
+  }
+}
+
+async function processDangerSignals(predsBySymbol, livePrices) {
+  // This runs in background — never awaited by the main polling loop
+  for (const [symbol, entries] of predsBySymbol) {
+    const price = livePrices.get(symbol)
+    if (!price) continue
+
+    for (const { pred } of entries) {
+      if (!pred.id || pred.outcome) continue
+
+      const danger = checkDangerSignal(pred, price)
+
+      if (danger) {
+        // New danger signal — fire if not already fired for this prediction
+        if (!dangerFiredIds.has(pred.id)) {
+          dangerFiredIds.add(pred.id)
+          dangerActiveIds.add(pred.id)
+
+          // Log to AMI store
+          try {
+            writeAMI(symbol, 'danger-log', { ...danger, id: `danger-${pred.id}` })
+          } catch { /* non-fatal */ }
+
+          // Save deviation record for adaptive learning
+          try {
+            saveDeviationRecord({
+              id:           pred.id,
+              symbol:       pred.symbol,
+              instrType:    pred.instrType ?? 'spot',
+              entryPrice:   pred.entryPrice,
+              actualPrice:  price,
+              deviation:    danger.deviationPct,
+              outcome:      'DANGER_SIGNAL',
+              correct:      false,
+              probability:  pred.probability,
+              grade:        pred.grade,
+              predictionMode: pred.predictionMode ?? 'both',
+              ts:           Date.now(),
+            })
+          } catch { /* non-fatal */ }
+
+          // Broadcast danger signal to SSE clients
+          broadcastSSE('danger_signal', danger)
+          console.warn(`[DangerMonitor] ⚠ DANGER: ${symbol} #${pred.id?.slice(0, 8)} price=${price} SL=${pred.stopLoss} dev=${danger.deviationPct}%`)
+
+          // Queue recalibration request (non-blocking)
+          dangerRetryQueue.push({ symbol, accuracy: 0, drift: Math.abs(danger.deviationPct), timestamp: Date.now() })
+        }
+      } else if (dangerActiveIds.has(pred.id)) {
+        // Price recovered above stop-loss — resolve the danger signal
+        dangerActiveIds.delete(pred.id)
+        broadcastSSE('danger_resolved', { predictionId: pred.id, symbol, livePrice: price, timestamp: Date.now() })
+        console.log(`[DangerMonitor] ✓ RESOLVED: ${symbol} #${pred.id?.slice(0, 8)} price recovered to ${price}`)
+      }
+    }
+  }
+
+  // Flush retry queue (non-blocking)
+  while (dangerRetryQueue.length > 0) {
+    const req = dangerRetryQueue.shift()
+    try {
+      await fetch(`${AI_BACKEND_URL}/calibrate`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(req),
+        signal:  AbortSignal.timeout(3000),
+      })
+    } catch {
+      // Re-queue for next cycle (max 3 retries per item)
+      if ((req._retries ?? 0) < 3) {
+        dangerRetryQueue.push({ ...req, _retries: (req._retries ?? 0) + 1 })
+      }
+    }
+  }
+}
+
+export function getDangerLog(limit = 50) {
+  // Return recent danger signals from in-memory tracking
+  return { dangerFiredCount: dangerFiredIds.size, dangerActiveCount: dangerActiveIds.size }
+}
 
 // ── Market hours check (NSE: Mon-Fri 09:15–15:30 IST) ────────────────────────
 
@@ -181,10 +303,14 @@ async function runValidationCycle() {
     if (symbolsToCheck.size === 0) return
 
     const resolvedSymbols = new Set()
+    // Collect live prices for danger signal processing
+    const livePrices = new Map()
 
     for (const symbol of symbolsToCheck) {
       const price = await fetchLivePrice(symbol)
       if (!price) continue
+
+      livePrices.set(symbol, price)
 
       const entries = predsBySymbol.get(symbol) ?? []
       let resolvedCount = 0
@@ -262,6 +388,15 @@ async function runValidationCycle() {
       }
     }
 
+    // ── Danger signal detection — runs in background, NEVER blocks this loop ──
+    // Fire-and-forget: processDangerSignals is async but we do NOT await it.
+    // The polling loop continues immediately. Live price data keeps flowing,
+    // which is essential to determine if a danger signal is genuine or a
+    // false positive that resolves within subsequent polling cycles.
+    processDangerSignals(predsBySymbol, livePrices).catch(err => {
+      console.warn('[DangerMonitor] Background processing error:', err.message)
+    })
+
   } catch (err) {
     console.error('[OutcomeValidator] Cycle error:', err.message)
   }
@@ -308,5 +443,6 @@ export function getValidatorStatus() {
     marketHours:         isMarketHours(),
     pollIntervalMs:      POLL_INTERVAL,
     sseClients:          sseClients.size,
+    dangerSignals:       getDangerLog(),
   }
 }

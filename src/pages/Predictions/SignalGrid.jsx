@@ -200,7 +200,21 @@ const SignalCard = memo(function SignalCard({ signal: s, expanded, onToggle }) {
         </div>
       )}
 
-      {/* ── Expand reasons ── */}
+      {/* ── Spot price context (derivatives) ── */}
+      {s.spotPrice != null && s.instrType !== 'spot' && (
+        <div className={styles.context} style={{ borderColor: 'rgba(176,96,255,0.2)', background: 'rgba(176,96,255,0.04)' }}>
+          <span>📍</span>
+          <span className={styles.contextText}>
+            Underlying spot <strong>{fmt(s.spotPrice)}</strong>
+            {s.instrType === 'futures' && s.basis != null && (
+              <span style={{ color: s.basis >= 0 ? 'var(--color-bull)' : 'var(--color-bear)' }}>
+                {' '}(basis {s.basis >= 0 ? '+' : ''}{s.basis?.toFixed(1)})
+              </span>
+            )}
+          </span>
+        </div>
+      )}
+
       <button className={styles.expandBtn} onClick={onToggle} aria-expanded={expanded}>
         <span>{expanded ? '▲' : '▼'}</span>
         {expanded ? 'Hide analysis' : 'Why this signal?'}
