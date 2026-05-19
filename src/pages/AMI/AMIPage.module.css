@@ -102,3 +102,8 @@
 .dangerDev { font-size: var(--text-sm); font-weight: 600; }
 .dangerPrice { font-size: var(--text-xs); color: var(--color-text-muted); }
 .dangerTime { font-size: var(--text-xs); color: var(--color-text-muted); white-space: nowrap; }
+
+/* Image Analysis Tab */
+.imageTabHeader { display: flex; flex-direction: column; gap: var(--space-1); }
+.imageActionRow { padding: var(--space-3) var(--space-4); background: rgba(0,212,255,0.05); border: 1px solid rgba(0,212,255,0.15); border-radius: var(--radius-md); }
+.inlineLink { color: var(--color-accent); text-decoration: underline; }

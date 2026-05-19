@@ -976,3 +976,84 @@ def jarvis_generate_provider_config(body: dict):
         raise HTTPException(status_code=400, detail="name and base_url required")
     config = PROVIDER_REGISTRY.generate_provider_config(name, base_url, env_key, fmt, models)
     return {"ok": True, "config": config}
+
+
+# ── Image Analysis endpoints ──────────────────────────────────────────────────
+
+from engine.image_reader import analyse_image, analyse_image_sync
+
+
+class ImageAnalyseRequest(BaseModel):
+    image_b64:  str  = Field(..., min_length=10)
+    context:    str  = Field(default="")
+    use_cloud:  bool = Field(default=True)
+    symbol:     Optional[str] = None
+
+
+@app.post("/image/analyse")
+async def image_analyse(req: ImageAnalyseRequest):
+    """
+    Analyse an image and extract all financial intelligence.
+
+    Accepts base64-encoded image (JPEG/PNG/WebP).
+    Pipeline: decode → pre-process → OCR → cloud vision (if configured) → merge.
+
+    Returns structured data: prices, patterns, indicators, bias, support/resistance,
+    option chain data, news headlines, and a natural-language summary.
+    """
+    try:
+        context = req.context or (f"Stock market image for {req.symbol}" if req.symbol else "")
+        result  = await analyse_image(req.image_b64, context, req.use_cloud)
+
+        # If a symbol was provided and not detected, inject it
+        if req.symbol and not result['merged'].get('symbol'):
+            result['merged']['symbol'] = req.symbol
+
+        logger.info(
+            f"[ImageReader] Analysis complete — method={result['method']} "
+            f"confidence={result['confidence']} symbol={result['merged'].get('symbol')}"
+        )
+        return result
+    except Exception as e:
+        logger.error(f"[ImageReader] Error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/image/analyse-sync")
+def image_analyse_sync(req: ImageAnalyseRequest):
+    """
+    Synchronous image analysis — OCR only, no cloud vision.
+    Faster but less accurate. Use when cloud AI is not configured.
+    """
+    try:
+        result = analyse_image_sync(req.image_b64, req.context)
+        if req.symbol and not result.get('merged', {}).get('symbol'):
+            if 'merged' not in result:
+                result['merged'] = {}
+            result['merged']['symbol'] = req.symbol
+        return result
+    except Exception as e:
+        logger.error(f"[ImageReader] Sync error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/image/capabilities")
+def image_capabilities():
+    """Return what image analysis capabilities are available on this server."""
+    from engine.image_reader import PIL_AVAILABLE, TESSERACT_AVAILABLE
+    import os
+    return {
+        "pil":          PIL_AVAILABLE,
+        "tesseract":    TESSERACT_AVAILABLE,
+        "openai":       bool(os.environ.get('OPENAI_API_KEY')),
+        "anthropic":    bool(os.environ.get('ANTHROPIC_API_KEY')),
+        "gemini":       bool(os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_API_KEY')),
+        "cloudVision":  any([
+            bool(os.environ.get('OPENAI_API_KEY')),
+            bool(os.environ.get('ANTHROPIC_API_KEY')),
+            bool(os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_API_KEY')),
+        ]),
+        "install_hint": "pip install Pillow pytesseract" if not PIL_AVAILABLE else (
+            "Install Tesseract OCR: https://github.com/tesseract-ocr/tesseract" if not TESSERACT_AVAILABLE else "All local capabilities available"
+        ),
+    }

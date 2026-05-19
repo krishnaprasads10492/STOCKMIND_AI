@@ -8,6 +8,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '@store/authStore.js'
 import { ErrorBoundary } from '@components/ErrorBoundary.jsx'
 import { Disclaimer } from '@components/Disclaimer.jsx'
+import { ImageAnalyser } from '@components/ImageAnalyser.jsx'
 import { sanitizeTicker } from '@utils/sanitize.js'
 import { apiFetch } from '@services/apiClient.js'
 
@@ -51,7 +52,7 @@ export default function AMIPage() {
       </div>
 
       <div className={styles.tabs} role="tablist">
-        {[['mtf','📅 Multi-Timeframe'],['deriv','⚙ Derivatives'],['docs','📄 Documents'],['danger','⚠ Danger Log']].map(([id,label]) => (
+        {[['mtf','📅 Multi-Timeframe'],['deriv','⚙ Derivatives'],['docs','📄 Documents'],['image','📸 Image Analysis'],['danger','⚠ Danger Log']].map(([id,label]) => (
           <button key={id} role="tab" aria-selected={activeTab===id}
             className={`${styles.tab} ${activeTab===id ? styles.tabActive : ''}`}
             onClick={() => setActiveTab(id)}>{label}</button>
@@ -62,6 +63,7 @@ export default function AMIPage() {
         {activeTab === 'mtf'    && <MTFTab    symbol={symbol} exchange={exchange} token={token} />}
         {activeTab === 'deriv'  && <DerivTab  symbol={symbol} exchange={exchange} token={token} />}
         {activeTab === 'docs'   && <DocsTab   symbol={symbol} exchange={exchange} token={token} />}
+        {activeTab === 'image'  && <ImageTab  symbol={symbol} />}
         {activeTab === 'danger' && <DangerTab symbol={symbol} token={token} />}
       </ErrorBoundary>
 
@@ -450,7 +452,42 @@ function DocsTab({ symbol, exchange, token }) {
   )
 }
 
-// ── Danger Log Tab ────────────────────────────────────────────────────────────
+// ── Image Analysis Tab ────────────────────────────────────────────────────────
+
+function ImageTab({ symbol }) {
+  const [lastResult, setLastResult] = useState(null)
+
+  return (
+    <div className={styles.tabContent}>
+      <div className={styles.imageTabHeader}>
+        <h3 className={styles.sectionTitle}>📸 Image Analysis</h3>
+        <p className={styles.sectionNote}>
+          Drop any chart screenshot, broker terminal, option chain, news headline, or financial data image.
+          The AI extracts prices, patterns, support/resistance, indicators, and generates a trading summary.
+          Works with Zerodha, Kite, TradingView, NSE, BSE, and any other platform screenshots.
+        </p>
+      </div>
+
+      <ImageAnalyser
+        symbol={symbol}
+        onResult={setLastResult}
+      />
+
+      {lastResult && (
+        <div className={styles.imageActionRow}>
+          <p className={styles.sectionNote}>
+            ✓ Analysis complete. Use the extracted data to run predictions on the{' '}
+            <a href="/predictions" className={styles.inlineLink}>Predictions page</a> or{' '}
+            <a href="/ami?tab=mtf" className={styles.inlineLink}>Multi-Timeframe analysis</a>.
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+
+
 
 function DangerTab({ symbol, token }) {
   const [records, setRecords] = useState([])

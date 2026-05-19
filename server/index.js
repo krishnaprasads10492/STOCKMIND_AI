@@ -28,6 +28,7 @@ import ghostRoutes         from './routes/ghost.js'
 import amiRoutes           from './routes/ami.js'
 import derivativesRoutes   from './routes/derivatives.js'
 import multibaggerRoutes   from './routes/multibagger.js'
+import imageAnalysisRoutes from './routes/imageAnalysis.js'
 import { startOutcomeValidator, getValidatorStatus, addSSEClient, startCleanupScheduler } from './services/outcomeValidator.js'
 import { rebuildAMIIndex } from './services/amiStore.js'
 import {
@@ -164,6 +165,7 @@ app.use('/api/ghost',          ghostRoutes)
 app.use('/api/ami',            amiRoutes)
 app.use('/api/derivatives',    derivativesRoutes)
 app.use('/api/multibagger',    multibaggerRoutes)
+app.use('/api/image',          imageAnalysisRoutes)
 
 // Outcome validator status
 app.get('/api/validator/status', (req, res) => res.json(getValidatorStatus()))

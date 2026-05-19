@@ -36,6 +36,12 @@ ta==0.11.0                     # RSI, MACD, ATR, Bollinger, etc.
 # HTTP client (for fetching market data directly from AI backend)
 httpx==0.27.2
 
+# Image analysis (OCR + vision)
+Pillow==10.4.0                 # Image processing (decode, resize, enhance)
+pytesseract==0.3.13            # OCR wrapper for Tesseract (install Tesseract separately)
+# Tesseract install: https://github.com/tesseract-ocr/tesseract
+# Windows: choco install tesseract  |  Ubuntu: apt install tesseract-ocr
+
 # Utilities
 python-dotenv==1.0.1
 joblib==1.4.2                  # model serialisation
