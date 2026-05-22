@@ -2,20 +2,23 @@
   height: 32px;
   background: var(--color-bg-base);
   border-bottom: 1px solid var(--color-border-subtle);
-  overflow: visible;          /* allow tooltip to overflow */
+  /* overflow-x: clip prevents the scrolling track from creating horizontal
+     page overflow, while overflow-y: visible keeps the tooltip accessible.
+     'clip' (unlike 'hidden') does not create a new formatting context so
+     absolute children (the tooltip) can still escape vertically. */
+  overflow-x: clip;
+  overflow-y: visible;
   position: sticky;
   top: 52px;
   z-index: 190;
   flex-shrink: 0;
+  /* Belt-and-suspenders: also tell the shell not to scroll us */
+  contain: layout style;
 }
 
-/* Clip the scrolling track but not the tooltip */
+/* Remove the now-unneeded pseudo overlay */
 .bar::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
+  content: none;
 }
 
 .track {

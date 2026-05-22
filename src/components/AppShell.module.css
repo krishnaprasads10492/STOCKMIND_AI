@@ -2,9 +2,10 @@
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  /* Support iPhone notch / safe areas */
   min-height: 100dvh;
   background: var(--color-bg-base);
+  /* Contain horizontal overflow from scrolling children (e.g. IndicesTicker) */
+  overflow-x: hidden;
 }
 
 /* ── Timeout banner ── */
