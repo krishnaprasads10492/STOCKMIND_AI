@@ -152,7 +152,7 @@ export default defineConfig({
   },
 
   server: {
-    port: 4098,
+    port: 4099,
     open: true,
     cors: true,
     // Warm up the most-used modules so first page load is instant
@@ -169,7 +169,7 @@ export default defineConfig({
     },
     proxy: {
       '/api': {
-        target:       'http://localhost:4098',
+      target:       'http://localhost:4098',
         changeOrigin: true,
       },
     },

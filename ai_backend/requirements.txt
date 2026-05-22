@@ -37,7 +37,7 @@ ta==0.11.0                     # RSI, MACD, ATR, Bollinger, etc.
 httpx==0.27.2
 
 # Image analysis (OCR + vision)
-Pillow==10.4.0                 # Image processing (decode, resize, enhance)
+Pillow==12.2.0                 # Image processing (decode, resize, enhance)
 pytesseract==0.3.13            # OCR wrapper for Tesseract (install Tesseract separately)
 # Tesseract install: https://github.com/tesseract-ocr/tesseract
 # Windows: choco install tesseract  |  Ubuntu: apt install tesseract-ocr
