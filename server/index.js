@@ -33,6 +33,9 @@ import multibaggerRoutes   from './routes/multibagger.js'
 import imageAnalysisRoutes from './routes/imageAnalysis.js'
 import { startOutcomeValidator, getValidatorStatus, addSSEClient, startCleanupScheduler } from './services/outcomeValidator.js'
 import { rebuildAMIIndex } from './services/amiStore.js'
+import { rebuildPredictionIndex } from './services/predictionStore.js'
+import { getIntegrationStatus } from './config/integrations.js'
+import { CACHE } from './storage/memCache.js'
 import {
   startAIGrowthWorker, stopAIGrowthWorker, pauseAIGrowthWorker, resumeAIGrowthWorker,
   getGrowthWorkerStatus, getUpgradeProposals, approveProposal, dismissProposal,
@@ -185,6 +188,16 @@ app.get('/api/audit/query',  (req, res) => {
 // ── DB health ─────────────────────────────────────────────────────────────────
 app.get('/api/db/health', async (req, res) => res.json(await DB.healthCheck()))
 
+// ── Storage stats ─────────────────────────────────────────────────────────────
+app.get('/api/storage/stats', (req, res) => res.json(getStorageStats()))
+app.post('/api/storage/cache/clear', (req, res) => {
+  CACHE.clear()
+  res.json({ ok: true, message: 'In-memory cache cleared' })
+})
+
+// ── Integration status ────────────────────────────────────────────────────────
+app.get('/api/integrations/status', (req, res) => res.json(getIntegrationStatus()))
+
 // Outcome validator status
 app.get('/api/validator/status', (req, res) => res.json(getValidatorStatus()))
 
@@ -279,6 +292,7 @@ initSecurity()
       auditLog('serverStart', { port: PORT, pid: process.pid })
       startOutcomeValidator()
       rebuildAMIIndex()
+      rebuildPredictionIndex()
       const retentionDays = Number(process.env.CLEANUP_RETENTION_DAYS ?? 30)
       startCleanupScheduler(retentionDays, 24)
       if (process.env.AI_GROWTH_WORKER_ENABLED === 'true') startAIGrowthWorker()
