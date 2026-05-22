@@ -304,3 +304,120 @@ body {
     color 0.4s ease,
     filter 0.3s ease;
 }
+
+/* ─── Mobile / Touch Global Improvements ────────────────────────────────── */
+
+/* Prevent double-tap zoom on buttons and links */
+button, a, [role="button"] {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Smooth momentum scrolling on iOS */
+.scroll-container,
+[class*="feed"],
+[class*="list"],
+[class*="grid"] {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Ensure inputs don't zoom on iOS (font-size >= 16px prevents auto-zoom) */
+input, select, textarea {
+  font-size: max(16px, var(--text-sm));
+}
+
+/* Prevent text selection on interactive elements */
+button, [role="button"], nav a {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Safe area bottom padding for fixed elements */
+.fixed-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* ── Mobile-specific card improvements ── */
+@media (max-width: 640px) {
+  /* Cards stretch to full width, no side gaps */
+  [class*="card"],
+  [class*="Card"] {
+    border-radius: var(--radius-md);
+  }
+
+  /* Tables — horizontal scroll instead of overflow */
+  table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Modals — full screen on mobile */
+  [role="dialog"] {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0 !important;
+    position: fixed !important;
+    bottom: 0 !important;
+    top: auto !important;
+  }
+
+  /* Charts — prevent overflow on small screens */
+  [class*="recharts"] {
+    max-width: 100%;
+  }
+
+  /* Hide non-essential sidebar elements */
+  [class*="sectionNote"],
+  [class*="hint"] {
+    font-size: var(--text-xs);
+  }
+}
+
+/* ── PWA install banner ── */
+#pwa-install-banner {
+  position: fixed;
+  bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+  left: var(--space-3);
+  right: var(--space-3);
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-xl);
+  padding: var(--space-4);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  z-index: 500;
+  box-shadow: var(--shadow-lg), 0 0 20px var(--color-accent-dim);
+  animation: slideUp 0.3s ease;
+}
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+#pwa-install-banner .pwa-icon { font-size: 2rem; flex-shrink: 0; }
+#pwa-install-banner .pwa-text { flex: 1; }
+#pwa-install-banner .pwa-title { font-size: var(--text-sm); font-weight: 700; color: var(--color-text-primary); }
+#pwa-install-banner .pwa-desc  { font-size: var(--text-xs); color: var(--color-text-muted); }
+#pwa-install-banner .pwa-install-btn {
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-accent);
+  color: #000;
+  border: none;
+  border-radius: var(--radius-md);
+  font-weight: 700;
+  font-size: var(--text-xs);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+#pwa-install-banner .pwa-dismiss {
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: var(--space-1);
+  flex-shrink: 0;
+}

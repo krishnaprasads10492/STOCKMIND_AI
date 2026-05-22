@@ -1,12 +1,141 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { VitePWA } from 'vite-plugin-pwa'
 import { fileURLToPath } from 'url'
 import path from 'path'
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    VitePWA({
+      registerType: 'autoUpdate',
+      // Include build assets in cache
+      includeAssets: ['favicon.ico', 'icons/*.png', 'icons/*.svg'],
+      manifest: {
+        name:             'StockMind AI',
+        short_name:       'StockMind',
+        description:      'AI-powered stock market prediction and analysis — free for everyone',
+        theme_color:      '#00d4ff',
+        background_color: '#060b14',
+        display:          'standalone',
+        orientation:      'any',
+        start_url:        '/',
+        scope:            '/',
+        lang:             'en',
+        categories:       ['finance', 'business', 'utilities'],
+        icons: [
+          { src: '/icons/icon-72.png',   sizes: '72x72',   type: 'image/png', purpose: 'any' },
+          { src: '/icons/icon-96.png',   sizes: '96x96',   type: 'image/png', purpose: 'any' },
+          { src: '/icons/icon-128.png',  sizes: '128x128', type: 'image/png', purpose: 'any' },
+          { src: '/icons/icon-144.png',  sizes: '144x144', type: 'image/png', purpose: 'any maskable' },
+          { src: '/icons/icon-152.png',  sizes: '152x152', type: 'image/png', purpose: 'any' },
+          { src: '/icons/icon-192.png',  sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
+          { src: '/icons/icon-384.png',  sizes: '384x384', type: 'image/png', purpose: 'any' },
+          { src: '/icons/icon-512.png',  sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
+        ],
+        shortcuts: [
+          {
+            name: 'Predictions',
+            short_name: 'Predict',
+            description: 'Generate trading signals',
+            url: '/predictions',
+            icons: [{ src: '/icons/icon-96.png', sizes: '96x96' }],
+          },
+          {
+            name: 'Dashboard',
+            short_name: 'Dashboard',
+            description: 'Market overview',
+            url: '/dashboard',
+            icons: [{ src: '/icons/icon-96.png', sizes: '96x96' }],
+          },
+          {
+            name: 'JARVIS',
+            short_name: 'JARVIS',
+            description: 'AI assistant',
+            url: '/jarvis',
+            icons: [{ src: '/icons/icon-96.png', sizes: '96x96' }],
+          },
+        ],
+        screenshots: [
+          {
+            src: '/screenshots/desktop.png',
+            sizes: '1280x800',
+            type: 'image/png',
+            form_factor: 'wide',
+            label: 'StockMind AI Dashboard',
+          },
+          {
+            src: '/screenshots/mobile.png',
+            sizes: '390x844',
+            type: 'image/png',
+            form_factor: 'narrow',
+            label: 'StockMind AI on Mobile',
+          },
+        ],
+      },
+      workbox: {
+        // Precache all static assets
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        // Runtime caching strategies
+        runtimeCaching: [
+          {
+            // API calls — network first, cache as fallback
+            urlPattern: /^https?:\/\/localhost:\d+\/api\/.*/i,
+            handler: 'NetworkFirst',
+            options: {
+              cacheName:         'api-cache',
+              expiration:        { maxEntries: 100, maxAgeSeconds: 5 * 60 },
+              networkTimeoutSeconds: 5,
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            // Unsplash / image CDN — cache first
+            urlPattern: /^https:\/\/images\.unsplash\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName:  'wallpaper-cache',
+              expiration: { maxEntries: 60, maxAgeSeconds: 7 * 24 * 60 * 60 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            // Pexels images
+            urlPattern: /^https:\/\/images\.pexels\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName:  'wallpaper-cache',
+              expiration: { maxEntries: 60, maxAgeSeconds: 7 * 24 * 60 * 60 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            // Yahoo Finance quotes — stale-while-revalidate (fast + fresh)
+            urlPattern: /^https:\/\/query\d\.finance\.yahoo\.com\/.*/i,
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName:  'market-data-cache',
+              expiration: { maxEntries: 50, maxAgeSeconds: 60 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+        ],
+        // Skip waiting so updates apply immediately
+        skipWaiting:     true,
+        clientsClaim:    true,
+        // Offline fallback page (the SPA itself handles this)
+        navigateFallback: '/index.html',
+        navigateFallbackDenylist: [/^\/api\//],
+      },
+      // Dev mode — enable PWA in development for testing
+      devOptions: {
+        enabled: false,   // enable manually when testing PWA
+        type:    'module',
+      },
+    }),
+  ],
 
   resolve: {
     alias: {

@@ -107,3 +107,21 @@
 .imageTabHeader { display: flex; flex-direction: column; gap: var(--space-1); }
 .imageActionRow { padding: var(--space-3) var(--space-4); background: rgba(0,212,255,0.05); border: 1px solid rgba(0,212,255,0.15); border-radius: var(--radius-md); }
 .inlineLink { color: var(--color-accent); text-decoration: underline; }
+
+/* ── Mobile responsive ── */
+@media (max-width: 640px) {
+  .page { padding: var(--space-3); gap: var(--space-3); }
+  .header { flex-direction: column; gap: var(--space-2); }
+  .symbolRow { width: 100%; }
+  .symbolInput { flex: 1; }
+  .tabs { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; padding-bottom: 2px; }
+  .tab { padding: var(--space-2) var(--space-3); font-size: var(--text-xs); }
+  .tabContent { gap: var(--space-3); }
+  .mtfGrid { grid-template-columns: 1fr; }
+  .derivControls { flex-direction: column; gap: var(--space-2); }
+  .derivControls .field { min-width: unset; }
+  .runBtn { width: 100%; padding: var(--space-3); min-height: 48px; }
+  .stratCard { border-radius: var(--radius-md); }
+  .uploadForm { flex-direction: column; }
+  .fileLabel { text-align: center; }
+}

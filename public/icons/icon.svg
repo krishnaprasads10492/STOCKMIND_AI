@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#060b14"/>
+  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0d1520"/>
+      <stop offset="100%" stop-color="#060b14"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00d4ff"/>
+      <stop offset="100%" stop-color="#b060ff"/>
+    </linearGradient>
+  </defs>
+  <!-- Chart line going up -->
+  <polyline
+    points="80,360 160,240 256,300 368,140 432,80"
+    fill="none"
+    stroke="url(#accent)"
+    stroke-width="28"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <!-- Arrow tip -->
+  <polyline
+    points="350,70 432,80 442,162"
+    fill="none"
+    stroke="url(#accent)"
+    stroke-width="28"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+  <!-- AI dot -->
+  <circle cx="256" cy="300" r="22" fill="#b060ff"/>
+  <circle cx="256" cy="300" r="12" fill="#e0b0ff"/>
+  <!-- Bottom text strip -->
+  <rect x="80" y="420" width="352" height="4" rx="2" fill="url(#accent)" opacity="0.4"/>
+</svg>

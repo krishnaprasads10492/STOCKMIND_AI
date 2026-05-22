@@ -394,3 +394,44 @@
 .derivSwitchOn { background: var(--color-ai); }
 .derivSwitchOn::after { transform: translateX(18px); }
 .derivLabel { font-size: var(--text-xs); font-weight: 700; color: var(--color-text-muted); min-width: 24px; }
+
+/* ── Mobile responsive ── */
+@media (max-width: 640px) {
+  .inputGrid {
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-3);
+  }
+
+  .inputPanel {
+    padding: var(--space-3);
+  }
+
+  .panelTitle {
+    font-size: var(--text-sm);
+  }
+
+  .generateBtn {
+    width: 100%;
+    justify-content: center;
+    padding: var(--space-3);
+    font-size: var(--text-base);
+    min-height: 48px;
+  }
+
+  .panelFooter {
+    flex-direction: column;
+    gap: var(--space-3);
+    align-items: stretch;
+  }
+
+  .summaryChips {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 390px) {
+  .inputGrid {
+    grid-template-columns: 1fr;
+  }
+}

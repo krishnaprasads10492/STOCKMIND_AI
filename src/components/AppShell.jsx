@@ -13,6 +13,7 @@ import { KeygenModal } from './KeygenModal.jsx'
 import { ChangePasswordModal } from './ChangePasswordModal.jsx'
 import { VoiceCommandIndicator } from './VoiceCommandIndicator.jsx'
 import { DangerSignalBanner } from './DangerSignalBanner.jsx'
+import { PWAInstallBanner } from './PWAInstallBanner.jsx'
 import styles from './AppShell.module.css'
 
 const NAV_ITEMS = [
@@ -294,6 +295,9 @@ export function AppShell() {
       <ErrorBoundary fallbackMessage="">
         <DangerSignalBanner />
       </ErrorBoundary>
+
+      {/* PWA install banner — mobile only, shown once */}
+      <PWAInstallBanner />
     </div>
   )
 }

@@ -2,11 +2,76 @@
 <html lang="en" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="AI-powered stock market prediction and analysis — calibrated probability signals for stocks, indices, F&O, crypto" />
-    <meta name="theme-color" content="#060b14" />
-    <title>StockMind AI</title>
+
+    <!-- ── PWA & Mobile Essentials ────────────────────────────────────────── -->
+    <!-- Viewport — critical for mobile rendering -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+    <!-- Theme colour — browser chrome on Android matches the app -->
+    <meta name="theme-color" content="#060b14" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f0f4f8" media="(prefers-color-scheme: light)" />
+
+    <!-- iOS PWA support -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="StockMind" />
+    <meta name="mobile-web-app-capable" content="yes" />
+
+    <!-- Prevent phone number detection -->
+    <meta name="format-detection" content="telephone=no" />
+
+    <!-- App Icons -->
+    <link rel="icon" type="image/svg+xml"  href="/icons/icon.svg" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png" />
+
+    <!-- iOS splash / touch icons -->
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152.png" />
+    <link rel="apple-touch-icon" sizes="144x144" href="/icons/icon-144.png" />
+    <link rel="apple-touch-icon" sizes="128x128" href="/icons/icon-128.png" />
+
+    <!-- PWA manifest -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+
+    <!-- ── SEO / Social ────────────────────────────────────────────────────── -->
+    <title>StockMind AI — Predictions & Analysis</title>
+    <meta name="description"
+      content="AI-powered stock market prediction and analysis — calibrated probability signals for stocks, indices, F&O, crypto. Free for everyone." />
+    <meta name="keywords"
+      content="stock market AI, NSE predictions, NIFTY signals, options analysis, F&O strategy, technical analysis AI" />
+    <meta name="author" content="StockMind AI" />
+    <meta name="robots" content="noindex" /><!-- Private local app — no indexing -->
+
+    <!-- Open Graph (WhatsApp/Telegram share preview) -->
+    <meta property="og:type"        content="website" />
+    <meta property="og:title"       content="StockMind AI" />
+    <meta property="og:description" content="AI-powered stock predictions — probabilities, not promises." />
+    <meta property="og:image"       content="/icons/icon-512.png" />
+
+    <!-- ── Performance ────────────────────────────────────────────────────── -->
+    <!-- Preconnect to market data APIs used at runtime -->
+    <link rel="preconnect" href="https://query1.finance.yahoo.com" />
+    <link rel="preconnect" href="https://images.unsplash.com" />
+
+    <!-- Preload key fonts (Space Grotesk used in Void Sentinel theme) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Orbitron:wght@700;900&family=Share+Tech+Mono&family=Lato:wght@400;700&family=Space+Grotesk:wght@400;500;700&family=Space+Mono&display=swap"
+    />
+
+    <!-- ── Safe area insets (notch / home indicator on iPhone) ─────────────── -->
+    <style>
+      :root {
+        --sat: env(safe-area-inset-top, 0px);
+        --sar: env(safe-area-inset-right, 0px);
+        --sab: env(safe-area-inset-bottom, 0px);
+        --sal: env(safe-area-inset-left, 0px);
+      }
+      /* Prevent flash of light content before JS applies theme */
+      html { background: #060b14; }
+    </style>
   </head>
   <body>
     <div id="root"></div>

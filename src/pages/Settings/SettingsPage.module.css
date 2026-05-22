@@ -470,3 +470,23 @@
   user-select: none;
   text-align: left;
 }
+
+/* ── Mobile responsive ── */
+@media (max-width: 640px) {
+  .page { gap: var(--space-4); }
+  .themeGrid { grid-template-columns: repeat(2, 1fr); }
+  .saveBtn { width: 100%; padding: var(--space-3); min-height: 48px; }
+  .input, .select { max-width: 100%; }
+  .slider { max-width: 100%; }
+  .pageTooltipGrid { grid-template-columns: 1fr 1fr; }
+  .ghostBtn { width: 100%; min-height: 44px; }
+  .workerActions { flex-direction: column; }
+  .workerBtn { width: 100%; min-height: 44px; }
+  .workerBtnPause { width: 100%; min-height: 44px; }
+  .workerBtnStart { width: 100%; min-height: 44px; }
+  .modalBox { width: 95%; padding: var(--space-5); }
+}
+
+@media (max-width: 390px) {
+  .themeGrid { grid-template-columns: 1fr; }
+}
