@@ -160,6 +160,8 @@ const TickerItem = ({ item, isHovered, onMouseEnter, onMouseLeave }) => {
 function DetailTooltip({ item }) {
   const up  = item.changePct >= 0
   const fmt = n => typeof n === 'number' ? n.toLocaleString('en-IN', { maximumFractionDigits: 2 }) : '—'
+  const fmtPct = n => n != null ? `${n >= 0 ? '+' : ''}${n.toFixed(2)}%` : null
+  const fmtTime = ts => ts ? new Date(ts).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : null
 
   return (
     <div className={styles.tooltipInner}>
@@ -170,16 +172,45 @@ function DetailTooltip({ item }) {
           {up ? '▲' : '▼'} {fmt(Math.abs(item.change ?? 0))} ({Math.abs(item.changePct ?? 0).toFixed(2)}%)
         </span>
       </div>
+
+      {/* Pre-market row */}
+      {item.preMarketPrice != null && (
+        <div className={styles.ttSessionRow}>
+          <span className={styles.ttSessionLabel}>Pre-mkt</span>
+          <span className={`${styles.ttSessionVal} ${(item.preMarketChangePct ?? 0) >= 0 ? styles.up : styles.down}`}>
+            {fmt(item.preMarketPrice)}
+            {item.preMarketChangePct != null && (
+              <span className={styles.ttSessionPct}> {fmtPct(item.preMarketChangePct)}</span>
+            )}
+          </span>
+          {item.preMarketTime && <span className={styles.ttSessionTime}>{fmtTime(item.preMarketTime)}</span>}
+        </div>
+      )}
+
+      {/* Post-market row */}
+      {item.postMarketPrice != null && (
+        <div className={styles.ttSessionRow}>
+          <span className={styles.ttSessionLabel}>Post-mkt</span>
+          <span className={`${styles.ttSessionVal} ${(item.postMarketChangePct ?? 0) >= 0 ? styles.up : styles.down}`}>
+            {fmt(item.postMarketPrice)}
+            {item.postMarketChangePct != null && (
+              <span className={styles.ttSessionPct}> {fmtPct(item.postMarketChangePct)}</span>
+            )}
+          </span>
+          {item.postMarketTime && <span className={styles.ttSessionTime}>{fmtTime(item.postMarketTime)}</span>}
+        </div>
+      )}
+
       <div className={styles.ttGrid}>
-        {item.open      != null && <TtRow label="Open"      value={fmt(item.open)} />}
-        {item.high      != null && <TtRow label="High"      value={fmt(item.high)}      color="var(--color-bull)" />}
-        {item.low       != null && <TtRow label="Low"       value={fmt(item.low)}       color="var(--color-bear)" />}
-        {item.close     != null && <TtRow label="Prev Close" value={fmt(item.close)} />}
-        {item.volume    != null && item.volume > 0 && <TtRow label="Volume" value={item.volume.toLocaleString('en-IN')} />}
-        {item.week52High != null && <TtRow label="52W High"  value={fmt(item.week52High)} color="var(--color-bull)" />}
-        {item.week52Low  != null && <TtRow label="52W Low"   value={fmt(item.week52Low)}  color="var(--color-bear)" />}
-        {item.pe        != null && <TtRow label="P/E"        value={fmt(item.pe)} />}
-        {item.marketCap != null && <TtRow label="Mkt Cap"    value={fmtCap(item.marketCap)} />}
+        {item.prevDayClose  != null && <TtRow label="Prev Close" value={fmt(item.prevDayClose)} />}
+        {item.open          != null && <TtRow label="Open"       value={fmt(item.open)} />}
+        {item.high          != null && <TtRow label="High"       value={fmt(item.high)}       color="var(--color-bull)" />}
+        {item.low           != null && <TtRow label="Low"        value={fmt(item.low)}        color="var(--color-bear)" />}
+        {item.volume        != null && item.volume > 0 && <TtRow label="Volume" value={item.volume.toLocaleString('en-IN')} />}
+        {item.week52High    != null && <TtRow label="52W High"   value={fmt(item.week52High)} color="var(--color-bull)" />}
+        {item.week52Low     != null && <TtRow label="52W Low"    value={fmt(item.week52Low)}  color="var(--color-bear)" />}
+        {item.pe            != null && <TtRow label="P/E"        value={fmt(item.pe)} />}
+        {item.marketCap     != null && <TtRow label="Mkt Cap"    value={fmtCap(item.marketCap)} />}
       </div>
     </div>
   )

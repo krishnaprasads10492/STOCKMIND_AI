@@ -36,6 +36,7 @@ import { rebuildAMIIndex } from './services/amiStore.js'
 import { rebuildPredictionIndex } from './services/predictionStore.js'
 import { getIntegrationStatus } from './config/integrations.js'
 import { CACHE } from './storage/memCache.js'
+import { getSessionRecord, getMarketContext, getSessionHistory, cleanupOldSessions } from './services/marketSessionStore.js'
 import {
   startAIGrowthWorker, stopAIGrowthWorker, pauseAIGrowthWorker, resumeAIGrowthWorker,
   getGrowthWorkerStatus, getUpgradeProposals, approveProposal, dismissProposal,
@@ -215,6 +216,27 @@ app.post('/api/storage/cache/clear', (req, res) => {
   res.json({ ok: true, message: 'In-memory cache cleared' })
 })
 
+// ── Market session routes ──────────────────────────────────────────────────────
+// GET /api/market/session/:symbol        — today's session snapshot
+// GET /api/market/session/:symbol/context — enriched context with pre/post gaps
+// GET /api/market/session/:symbol/history — last N days
+app.get('/api/market/session/:symbol', (req, res) => {
+  const symbol  = req.params.symbol.toUpperCase().replace(/[^A-Z0-9^.=]/g, '')
+  const date    = req.query.date ?? undefined
+  const record  = getSessionRecord(symbol, date)
+  if (!record) return res.status(404).json({ error: 'No session data for this symbol today' })
+  res.json(record)
+})
+app.get('/api/market/session/:symbol/context', (req, res) => {
+  const symbol = req.params.symbol.toUpperCase().replace(/[^A-Z0-9^.=]/g, '')
+  res.json(getMarketContext(symbol))
+})
+app.get('/api/market/session/:symbol/history', (req, res) => {
+  const symbol = req.params.symbol.toUpperCase().replace(/[^A-Z0-9^.=]/g, '')
+  const days   = Math.min(Number(req.query.days ?? 5), 30)
+  res.json({ symbol, history: getSessionHistory(symbol, days) })
+})
+
 // ── Integration status ────────────────────────────────────────────────────────
 app.get('/api/integrations/status', (req, res) => res.json(getIntegrationStatus()))
 
@@ -315,6 +337,8 @@ initSecurity()
       rebuildPredictionIndex()
       const retentionDays = Number(process.env.CLEANUP_RETENTION_DAYS ?? 30)
       startCleanupScheduler(retentionDays, 24)
+      // Clean up old market session data once at startup
+      cleanupOldSessions()
       if (process.env.AI_GROWTH_WORKER_ENABLED === 'true') startAIGrowthWorker()
     })
   })

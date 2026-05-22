@@ -69,7 +69,8 @@ function getStale(map, key) {
 
 async function fetchFromYahooV8(yahooSym, symbol) {
   try {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSym)}?interval=1d&range=1d`
+    // Use the quote endpoint (not chart) to get pre/post market data
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSym)}?interval=1m&range=1d&includePrePost=true`
     const res = await fetch(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
@@ -79,30 +80,56 @@ async function fetchFromYahooV8(yahooSym, symbol) {
     })
     if (!res.ok) return null
     const json = await res.json()
-    const meta = json?.chart?.result?.[0]?.meta
+    const result = json?.chart?.result?.[0]
+    const meta   = result?.meta
     if (!meta?.regularMarketPrice) return null
 
     const price = meta.regularMarketPrice
     const prev  = meta.previousClose ?? meta.chartPreviousClose ?? price
+
+    // Pre-market (before regular hours)
+    const prePrice  = meta.preMarketPrice   ?? null
+    const prePrev   = price  // compare pre-market to regular close
+    const preChg    = prePrice != null ? prePrice - price : null
+    const preChgPct = prePrice != null && price ? ((prePrice - price) / price) * 100 : null
+    const preTime   = meta.preMarketTime   ?? null
+
+    // Post-market (after regular hours)
+    const postPrice  = meta.postMarketPrice  ?? null
+    const postChg    = postPrice != null ? postPrice - price : null
+    const postChgPct = postPrice != null && price ? ((postPrice - price) / price) * 100 : null
+    const postTime   = meta.postMarketTime  ?? null
+
     return {
       symbol,
       price,
       change:      price - prev,
       changePct:   ((price - prev) / prev) * 100,
-      open:        meta.regularMarketOpen ?? price,
+      open:        meta.regularMarketOpen    ?? price,
       high:        meta.regularMarketDayHigh ?? price,
-      low:         meta.regularMarketDayLow ?? price,
-      close:       prev,
-      volume:      meta.regularMarketVolume ?? 0,
-      week52High:  meta.fiftyTwoWeekHigh ?? null,
-      week52Low:   meta.fiftyTwoWeekLow  ?? null,
+      low:         meta.regularMarketDayLow  ?? price,
+      close:       prev,                          // previous day close
+      prevDayClose: prev,                         // explicit alias
+      volume:      meta.regularMarketVolume  ?? 0,
+      week52High:  meta.fiftyTwoWeekHigh     ?? null,
+      week52Low:   meta.fiftyTwoWeekLow      ?? null,
       companyName: meta.longName ?? meta.shortName ?? symbol,
-      exchange:    meta.exchangeName ?? null,
-      currency:    meta.currency ?? 'INR',
-      marketState: meta.marketState ?? 'CLOSED',
-      source:      'yahoo',
-      live:        meta.marketState === 'REGULAR',
-      ts:          Date.now(),
+      exchange:    meta.exchangeName         ?? null,
+      currency:    meta.currency             ?? 'INR',
+      marketState: meta.marketState          ?? 'CLOSED',
+      // Pre-market
+      preMarketPrice:     prePrice,
+      preMarketChange:    preChg    != null ? Math.round(preChg    * 100) / 100 : null,
+      preMarketChangePct: preChgPct != null ? Math.round(preChgPct * 100) / 100 : null,
+      preMarketTime:      preTime   != null ? new Date(preTime * 1000).toISOString() : null,
+      // Post-market
+      postMarketPrice:     postPrice,
+      postMarketChange:    postChg    != null ? Math.round(postChg    * 100) / 100 : null,
+      postMarketChangePct: postChgPct != null ? Math.round(postChgPct * 100) / 100 : null,
+      postMarketTime:      postTime   != null ? new Date(postTime * 1000).toISOString() : null,
+      source: 'yahoo',
+      live:   meta.marketState === 'REGULAR',
+      ts:     Date.now(),
     }
   } catch {
     return null
@@ -117,6 +144,12 @@ async function fetchFromYahooLib(yahooSym, symbol) {
     if (!q?.regularMarketPrice) return null
     const price = q.regularMarketPrice
     const prev  = q.regularMarketPreviousClose ?? price
+
+    const prePrice    = q.preMarketPrice    ?? null
+    const preChgPct   = q.preMarketChangePercent ?? (prePrice != null && price ? ((prePrice - price) / price * 100) : null)
+    const postPrice   = q.postMarketPrice   ?? null
+    const postChgPct  = q.postMarketChangePercent ?? (postPrice != null && price ? ((postPrice - price) / price * 100) : null)
+
     return {
       symbol,
       price,
@@ -126,6 +159,7 @@ async function fetchFromYahooLib(yahooSym, symbol) {
       high:         q.regularMarketDayHigh      ?? price,
       low:          q.regularMarketDayLow       ?? price,
       close:        prev,
+      prevDayClose: prev,
       volume:       q.regularMarketVolume       ?? 0,
       week52High:   q.fiftyTwoWeekHigh          ?? null,
       week52Low:    q.fiftyTwoWeekLow           ?? null,
@@ -139,9 +173,19 @@ async function fetchFromYahooLib(yahooSym, symbol) {
       exchange:     q.exchange                  ?? null,
       currency:     q.currency                  ?? 'INR',
       marketState:  q.marketState               ?? 'CLOSED',
-      source:       'yahoo',
-      live:         q.marketState === 'REGULAR',
-      ts:           Date.now(),
+      // Pre-market
+      preMarketPrice:     prePrice,
+      preMarketChange:    q.preMarketChange    ?? (prePrice != null ? Math.round((prePrice - price) * 100) / 100 : null),
+      preMarketChangePct: preChgPct            != null ? Math.round(preChgPct * 100) / 100 : null,
+      preMarketTime:      q.preMarketTime      ?? null,
+      // Post-market
+      postMarketPrice:     postPrice,
+      postMarketChange:    q.postMarketChange    ?? (postPrice != null ? Math.round((postPrice - price) * 100) / 100 : null),
+      postMarketChangePct: postChgPct            != null ? Math.round(postChgPct * 100) / 100 : null,
+      postMarketTime:      q.postMarketTime      ?? null,
+      source: 'yahoo',
+      live:   q.marketState === 'REGULAR',
+      ts:     Date.now(),
     }
   } catch {
     return null

@@ -202,3 +202,44 @@
   font-style: italic;
   padding: 0 var(--space-6);
 }
+
+/* ── Pre / Post market session rows in tooltip ── */
+.ttSessionRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 3px var(--space-1);
+  background: var(--color-bg-base);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  margin-bottom: 2px;
+}
+
+.ttSessionLabel {
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  width: 54px;
+  flex-shrink: 0;
+}
+
+.ttSessionVal {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: var(--text-xs);
+  flex: 1;
+}
+
+.ttSessionPct {
+  font-size: 0.65rem;
+  opacity: 0.85;
+}
+
+.ttSessionTime {
+  font-size: 0.6rem;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+}

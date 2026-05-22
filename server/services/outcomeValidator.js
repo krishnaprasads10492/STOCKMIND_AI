@@ -17,6 +17,7 @@
 import { listSecure, readSecure, writeSecure } from '../storage/fileStore.js'
 import { computeAccuracy, saveDeviationRecord } from './predictionStore.js'
 import { writeAMI } from './amiStore.js'
+import { recordSnapshot } from './marketSessionStore.js'
 
 const AI_BACKEND_URL     = process.env.AI_BACKEND_URL ?? 'http://localhost:8001'
 const FINNHUB_KEY        = process.env.FINNHUB_KEY ?? process.env.VITE_FINNHUB_KEY ?? ''
@@ -311,6 +312,13 @@ async function runValidationCycle() {
       if (!price) continue
 
       livePrices.set(symbol, price)
+
+      // Record snapshot for market session store (pre/post/regular tracking)
+      try {
+        const { fetchQuote } = await import('./yahooFinanceService.js')
+        const tick = await fetchQuote(symbol, 'NSE')
+        if (tick) recordSnapshot(tick)
+      } catch { /* non-fatal */ }
 
       const entries = predsBySymbol.get(symbol) ?? []
       let resolvedCount = 0
