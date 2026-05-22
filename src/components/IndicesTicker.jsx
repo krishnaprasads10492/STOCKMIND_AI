@@ -106,16 +106,18 @@ export function IndicesTicker() {
         ))}
       </div>
 
-      {/* Market status tag — right edge */}
+      {/* Status row — below the scrolling track */}
       {dataSource === 'yahoo' && (
-        <span
-          className={`${styles.sourceTag} ${session.isLive ? styles.sourceTagLive : styles.sourceTagEOD}`}
-          title={session.isLive
-            ? `Live · closes ${session.closesAt ?? ''}`
-            : `EOD · next open: ${session.nextOpen ?? 'unknown'}`}
-        >
-          {session.isLive ? '● LIVE' : '◐ EOD'}
-        </span>
+        <div className={styles.statusRow}>
+          <span
+            className={`${styles.sourceTag} ${session.isLive ? styles.sourceTagLive : styles.sourceTagEOD}`}
+            title={session.isLive
+              ? `Live · closes ${session.closesAt ?? ''}`
+              : `EOD · next open: ${session.nextOpen ?? 'unknown'}`}
+          >
+            {session.isLive ? '● LIVE' : '◐ EOD'}
+          </span>
+        </div>
       )}
 
       {hoveredDetail && (

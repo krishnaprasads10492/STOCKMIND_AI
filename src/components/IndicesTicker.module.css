@@ -1,5 +1,4 @@
 .bar {
-  height: 32px;
   background: var(--color-bg-base);
   border-bottom: 1px solid var(--color-border-subtle);
   overflow-x: clip;
@@ -9,8 +8,9 @@
   z-index: 190;
   flex-shrink: 0;
   contain: layout style;
-  /* Reserve space on the right so the scrolling track never slides under the tag */
-  padding-right: 72px;
+  /* Two-row layout: track on top, status tag on bottom */
+  display: flex;
+  flex-direction: column;
 }
 
 /* Remove the now-unneeded pseudo overlay */
@@ -21,13 +21,24 @@
 .track {
   display: flex;
   align-items: center;
-  height: 32px;
+  height: 28px;
   width: max-content;
   animation: scroll 50s linear infinite;
   gap: 0;
   overflow: hidden;
 }
 .track.paused { animation-play-state: paused; }
+
+/* ── Status row — sits below the scrolling track ── */
+.statusRow {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: 16px;
+  padding: 0 var(--space-3);
+  border-top: 1px solid var(--color-border-subtle);
+  background: var(--color-bg-base);
+}
 
 @keyframes scroll {
   from { transform: translateX(0); }
@@ -146,30 +157,22 @@
 }
 
 @media (max-width: 480px) {
-  .bar { height: 28px; }
+  .bar { }
   .item { padding: 0 var(--space-3); height: 28px; }
   .track { height: 28px; }
+  .statusRow { height: 14px; }
 }
 
 /* ── Source indicator (right edge) ── */
 .sourceTag {
-  position: absolute;
-  right: var(--space-3);
-  top: 50%;
-  transform: translateY(-50%);
   font-size: 0.6rem;
   font-weight: 700;
   font-family: var(--font-mono);
   padding: 1px 6px;
   border-radius: var(--radius-full);
   border: 1px solid;
-  /* Must sit above the scrolling track */
-  z-index: 3;
   pointer-events: none;
   white-space: nowrap;
-  /* Opaque background so track text doesn't bleed through */
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
 }
 .sourceTagLive {
   color: #2dd4bf;
