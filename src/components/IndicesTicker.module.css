@@ -2,18 +2,15 @@
   height: 32px;
   background: var(--color-bg-base);
   border-bottom: 1px solid var(--color-border-subtle);
-  /* overflow-x: clip prevents the scrolling track from creating horizontal
-     page overflow, while overflow-y: visible keeps the tooltip accessible.
-     'clip' (unlike 'hidden') does not create a new formatting context so
-     absolute children (the tooltip) can still escape vertically. */
   overflow-x: clip;
   overflow-y: visible;
   position: sticky;
   top: 52px;
   z-index: 190;
   flex-shrink: 0;
-  /* Belt-and-suspenders: also tell the shell not to scroll us */
   contain: layout style;
+  /* Reserve space on the right so the scrolling track never slides under the tag */
+  padding-right: 72px;
 }
 
 /* Remove the now-unneeded pseudo overlay */
@@ -166,23 +163,28 @@
   padding: 1px 6px;
   border-radius: var(--radius-full);
   border: 1px solid;
-  z-index: 2;
+  /* Must sit above the scrolling track */
+  z-index: 3;
   pointer-events: none;
   white-space: nowrap;
+  /* Opaque background so track text doesn't bleed through */
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
 }
 .sourceTagLive {
   color: #2dd4bf;
-  background: rgba(45,212,191,0.1);
-  border-color: rgba(45,212,191,0.3);
+  background: var(--color-bg-base);
+  border-color: rgba(45,212,191,0.4);
+  box-shadow: 0 0 8px rgba(45,212,191,0.15);
 }
 .sourceTagEOD {
   color: var(--color-warn);
-  background: var(--color-warn-dim);
-  border-color: rgba(255,170,0,0.3);
+  background: var(--color-bg-base);
+  border-color: rgba(255,170,0,0.4);
 }
 .sourceTagMock {
   color: var(--color-text-muted);
-  background: var(--color-bg-elevated);
+  background: var(--color-bg-base);
   border-color: var(--color-border);
 }
 
