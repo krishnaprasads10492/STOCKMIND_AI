@@ -94,19 +94,39 @@ async function bootstrap() {
 // ── Express app ───────────────────────────────────────────────────────────────
 const app = express()
 
+// ── Chrome DevTools well-known endpoint ──────────────────────────────────────
+// Chrome 124+ automatically fetches this URL from any open tab to enable
+// DevTools features. Without it the browser logs a CSP violation.
+// Must be registered BEFORE Helmet so the CSP header is not applied to it.
+app.get('/.well-known/appspecific/com.chrome.devtools.json', (_req, res) => {
+  res.setHeader('Content-Type', 'application/json')
+  res.setHeader('Cache-Control', 'public, max-age=86400')
+  res.json({ version: '1.0', debugger: { port: PORT } })
+})
+
 // Helmet with proper CSP for local SPA
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc:     ["'self'"],
       scriptSrc:      ["'self'", "'unsafe-inline'"],  // Vite dev needs inline
-      styleSrc:       ["'self'", "'unsafe-inline'"],
-      imgSrc:         ["'self'", 'data:', 'blob:'],
-      connectSrc:     ["'self'", 'ws://localhost:*', 'wss://localhost:*',
+      styleSrc:       ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+      imgSrc:         ["'self'", 'data:', 'blob:',
+                       'https://images.unsplash.com',
+                       'https://images.pexels.com',
+                       'https://pixabay.com'],
+      connectSrc:     ["'self'",
+                       'http://localhost:*',
+                       'ws://localhost:*', 'wss://localhost:*',
                        'http://localhost:8001',
                        'https://query1.finance.yahoo.com',
+                       'https://query2.finance.yahoo.com',
                        'https://stream.binance.com',
-                       'https://finnhub.io'],      fontSrc:        ["'self'", 'data:'],
+                       'https://finnhub.io',
+                       'https://api.unsplash.com',
+                       'https://api.pexels.com',
+                       'https://pixabay.com'],
+      fontSrc:        ["'self'", 'data:', 'https://fonts.gstatic.com'],
       objectSrc:      ["'none'"],
       frameAncestors: ["'none'"],
       baseUri:        ["'self'"],
