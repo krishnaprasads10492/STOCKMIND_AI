@@ -11,6 +11,8 @@ import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { initEncryption, existsSecure } from './storage/fileStore.js'
+import { initAuditLog, auditLog, verifyAuditChain, queryAuditLog, getAuditStats } from './storage/auditLog.js'
+import { DB } from './storage/dbAdapter.js'
 import { createUser } from './services/authService.js'
 import authRoutes          from './routes/auth.js'
 import userRoutes          from './routes/users.js'
@@ -45,7 +47,13 @@ const PORT = process.env.PORT ?? 5000
 // Set via environment variable. Default is only for first-run convenience.
 // Once data is written, you MUST use the same password every time.
 const DATA_PASSWORD = process.env.DATA_PASSWORD ?? 'stockmind-local-dev-password'
-initEncryption(DATA_PASSWORD)
+
+// Init encryption (async — Argon2id preferred)
+async function initSecurity() {
+  await initEncryption(DATA_PASSWORD)
+  initAuditLog(DATA_PASSWORD)
+  await DB.init()
+}
 
 // ── Bootstrap from users-seed.json ───────────────────────────────────────────
 async function bootstrap() {
@@ -167,6 +175,17 @@ app.use('/api/derivatives',    derivativesRoutes)
 app.use('/api/multibagger',    multibaggerRoutes)
 app.use('/api/image',          imageAnalysisRoutes)
 
+// ── Audit log routes (admin only) ─────────────────────────────────────────────
+app.get('/api/audit/stats',  (req, res) => res.json(getAuditStats()))
+app.get('/api/audit/verify', (req, res) => res.json(verifyAuditChain()))
+app.get('/api/audit/query',  (req, res) => {
+  const { event, userId, limit = 100 } = req.query
+  res.json(queryAuditLog({ event, userId, limit: Number(limit) }))
+})
+
+// ── DB health ─────────────────────────────────────────────────────────────────
+app.get('/api/db/health', async (req, res) => res.json(await DB.healthCheck()))
+
 // Outcome validator status
 app.get('/api/validator/status', (req, res) => res.json(getValidatorStatus()))
 
@@ -251,17 +270,19 @@ if (fs.existsSync(DIST_DIR)) {
 app.use('/api', (_req, res) => res.status(404).json({ error: 'Not found' }))
 app.use((err, _req, res, _next) => { console.error('[server]', err); res.status(500).json({ error: 'Internal server error' }) })
 
-bootstrap().then(() => {
-  app.listen(PORT, () => {
-    console.log(`[StockMind AI] Backend → http://localhost:${PORT}`)
-    startOutcomeValidator()
-    rebuildAMIIndex()
-    // Cleanup scheduler: default 30-day retention, runs every 24h
-    const retentionDays = Number(process.env.CLEANUP_RETENTION_DAYS ?? 30)
-    startCleanupScheduler(retentionDays, 24)
-    // AI Growth Worker — auto-start if env flag set (user can toggle in Settings)
-    if (process.env.AI_GROWTH_WORKER_ENABLED === 'true') {
-      startAIGrowthWorker()
-    }
+// Async bootstrap with security init
+initSecurity()
+  .then(() => bootstrap())
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`[StockMind AI] ⚡ Backend → http://localhost:${PORT}`)
+      console.log(`[StockMind AI] 🔐 Encryption: Argon2id + AES-256-GCM + HMAC-SHA512`)
+      auditLog('serverStart', { port: PORT, pid: process.pid })
+      startOutcomeValidator()
+      rebuildAMIIndex()
+      const retentionDays = Number(process.env.CLEANUP_RETENTION_DAYS ?? 30)
+      startCleanupScheduler(retentionDays, 24)
+      if (process.env.AI_GROWTH_WORKER_ENABLED === 'true') startAIGrowthWorker()
+    })
   })
-})
+  .catch(err => { console.error('[StockMind AI] Fatal startup:', err); process.exit(1) })
