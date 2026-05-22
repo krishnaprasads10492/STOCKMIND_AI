@@ -196,3 +196,111 @@ code, pre { font-family: var(--font-mono); font-size: var(--text-sm); }
 .text-ai      { color: var(--color-ai); }
 .font-mono    { font-family: var(--font-mono); }
 .sr-only      { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+
+/* ─── Theme-specific HUD decorations ────────────────────────────────────── */
+
+/* ── Gotham Tactical — military HUD corner brackets ── */
+[data-theme-id="gotham-tactical"] .card-hud,
+[class*="gotham"] .card-hud {
+  position: relative;
+}
+
+/* HUD bracket corners for cards in Gotham Tactical theme */
+.theme-gotham-tactical [class*="card"],
+.theme-gotham-tactical [class*="Card"] {
+  position: relative;
+}
+.theme-gotham-tactical [class*="card"]::before,
+.theme-gotham-tactical [class*="Card"]::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  background:
+    linear-gradient(var(--card-corner-color, rgba(0,255,65,0.5)), var(--card-corner-color, rgba(0,255,65,0.5))) top left / 10px 1px no-repeat,
+    linear-gradient(var(--card-corner-color, rgba(0,255,65,0.5)), var(--card-corner-color, rgba(0,255,65,0.5))) top left / 1px 10px no-repeat,
+    linear-gradient(var(--card-corner-color, rgba(0,255,65,0.5)), var(--card-corner-color, rgba(0,255,65,0.5))) top right / 10px 1px no-repeat,
+    linear-gradient(var(--card-corner-color, rgba(0,255,65,0.5)), var(--card-corner-color, rgba(0,255,65,0.5))) top right / 1px 10px no-repeat,
+    linear-gradient(var(--card-corner-color, rgba(0,255,65,0.5)), var(--card-corner-color, rgba(0,255,65,0.5))) bottom left / 10px 1px no-repeat,
+    linear-gradient(var(--card-corner-color, rgba(0,255,65,0.5)), var(--card-corner-color, rgba(0,255,65,0.5))) bottom left / 1px 10px no-repeat,
+    linear-gradient(var(--card-corner-color, rgba(0,255,65,0.5)), var(--card-corner-color, rgba(0,255,65,0.5))) bottom right / 10px 1px no-repeat,
+    linear-gradient(var(--card-corner-color, rgba(0,255,65,0.5)), var(--card-corner-color, rgba(0,255,65,0.5))) bottom right / 1px 10px no-repeat;
+  pointer-events: none;
+  border-radius: inherit;
+  z-index: 1;
+}
+
+/* ── Stark JARVIS — topbar red accent strips ── */
+.theme-stark-jarvis [class*="topbar"],
+.theme-stark-jarvis [class*="Topbar"] {
+  background-image: var(--topbar-pattern);
+  border-bottom-color: var(--topbar-accent-border, rgba(180,30,10,0.6)) !important;
+}
+
+/* Arc reactor confidence badge */
+.theme-stark-jarvis .arcReactorBadge {
+  background: radial-gradient(circle, rgba(0,220,255,0.2) 0%, rgba(0,180,220,0.05) 60%, transparent 70%);
+  border: 1px solid var(--arc-reactor-color, #00dcff);
+  box-shadow: var(--arc-reactor-glow);
+  border-radius: 50%;
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  animation: arcPulse 3s ease-in-out infinite;
+}
+@keyframes arcPulse {
+  0%, 100% { box-shadow: var(--arc-reactor-glow, 0 0 20px rgba(0,220,255,0.7)); }
+  50%       { box-shadow: 0 0 8px rgba(0,220,255,0.3); }
+}
+
+/* ── Cerebro Neural — glowing network nodes ── */
+.theme-cerebro-neural [class*="badge"],
+.theme-cerebro-neural [class*="Badge"] {
+  box-shadow: var(--node-glow, 0 0 12px rgba(136,102,255,0.8));
+}
+
+/* Neural network animated border */
+.theme-cerebro-neural [class*="card"],
+.theme-cerebro-neural [class*="Card"] {
+  background-image: radial-gradient(ellipse at 50% 0%, rgba(136,102,255,0.04) 0%, transparent 60%);
+}
+
+/* ── Void Sentinel — minimal ultra-dark with subtle purple ── */
+.theme-void-sentinel [class*="topbar"],
+.theme-void-sentinel [class*="Topbar"] {
+  border-bottom-color: var(--topbar-accent-border, rgba(100,80,200,0.2)) !important;
+}
+
+/* ─── Scanline overlay (optional, applies to all dark themes) ─────────── */
+.scanline-overlay::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,0.03) 2px,
+    rgba(0,0,0,0.03) 4px
+  );
+  pointer-events: none;
+  z-index: 9998;
+}
+
+/* ─── Theme transition (smooth when switching themes) ─────────────────── */
+:root {
+  transition:
+    --color-bg-base 0.3s ease,
+    --color-accent 0.3s ease,
+    --color-border 0.3s ease;
+}
+
+body {
+  transition:
+    background-color 0.4s ease,
+    background-image 0.4s ease,
+    color 0.4s ease,
+    filter 0.3s ease;
+}

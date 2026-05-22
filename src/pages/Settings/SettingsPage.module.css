@@ -414,3 +414,59 @@
   color: var(--color-text-muted);
   font-style: italic;
 }
+
+/* ── Theme preview swatch ── */
+.themeSwatch {
+  width: 100%;
+  height: 44px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  flex-shrink: 0;
+  margin-bottom: var(--space-1);
+}
+
+.swatchBg {
+  width: 100%;
+  height: 100%;
+  border: 1px solid;
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 6px;
+  position: relative;
+  overflow: hidden;
+}
+
+.swatchAccent {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.swatchBar {
+  height: 3px;
+  width: 80%;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+/* Override theme card for new swatch layout */
+.themeCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast), transform var(--transition-fast);
+  user-select: none;
+  text-align: left;
+}

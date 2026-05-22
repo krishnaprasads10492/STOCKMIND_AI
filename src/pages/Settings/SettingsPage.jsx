@@ -5,8 +5,7 @@ import { useThemeStore } from '@store/themeStore.js'
 import { updatePreferencesApi } from '@services/backendClient.js'
 import { apiFetch } from '@services/apiClient.js'
 import { activateGhostMode, wipeServerData } from '@utils/ghostMode.js'
-import { THEMES, THEME_KEYS } from '@utils/themes.js'
-import styles from './SettingsPage.module.css'
+import { THEMES, THEME_KEYS } from '@utils/themes.js'import styles from './SettingsPage.module.css'
 
 export default function SettingsPage() {
   const { user, updatePreferences, token } = useAuthStore()
@@ -155,6 +154,10 @@ export default function SettingsPage() {
             {THEME_KEYS.map(key => {
               const t = THEMES[key]
               const isActive = activeTheme === key
+              const accentColor = t.vars?.['--color-accent'] ?? '#00d4ff'
+              const bgColor     = t.vars?.['--color-bg-base'] ?? '#060b14'
+              const textColor   = t.vars?.['--color-text-primary'] ?? '#e2f0ff'
+              const borderColor = t.vars?.['--color-border'] ?? '#1e3a5f'
               return (
                 <button
                   key={key}
@@ -163,7 +166,25 @@ export default function SettingsPage() {
                   onClick={() => setTheme(key)}
                   aria-pressed={isActive}
                   aria-label={`${t.name} theme: ${t.description}`}
+                  style={{
+                    '--preview-bg':     bgColor,
+                    '--preview-accent': accentColor,
+                    '--preview-text':   textColor,
+                    '--preview-border': borderColor,
+                  }}
                 >
+                  {/* Mini preview swatch */}
+                  <div className={styles.themeSwatch} aria-hidden="true">
+                    <div className={styles.swatchBg}
+                      style={{ background: bgColor, borderColor }}>
+                      <div className={styles.swatchAccent}
+                        style={{ background: accentColor, boxShadow: `0 0 6px ${accentColor}` }} />
+                      <div className={styles.swatchBar}
+                        style={{ background: accentColor, opacity: 0.4 }} />
+                      <div className={styles.swatchBar}
+                        style={{ background: textColor, opacity: 0.15, width: '60%' }} />
+                    </div>
+                  </div>
                   <span className={styles.themeEmoji} aria-hidden="true">{t.emoji}</span>
                   <span className={styles.themeName}>{t.name}</span>
                   <span className={styles.themeDesc}>{t.description}</span>

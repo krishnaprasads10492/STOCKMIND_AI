@@ -87,7 +87,7 @@ export function AppShell() {
   }
 
   return (
-    <div className={styles.shell}>
+    <div className={`${styles.shell} theme-${activeTheme}`}>
       {/* ── Forced password change (blocks all content) ── */}
       {mustChangePw && (
         <ChangePasswordModal forced onClose={handlePasswordChanged} />
