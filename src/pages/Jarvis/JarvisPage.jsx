@@ -717,6 +717,7 @@ function ThemeStudioTab({ token, isAdmin }) {
 
   const [name,           setName]           = useState('')
   const [description,    setDescription]    = useState('')
+  const [smartSearch,    setSmartSearch]    = useState(true)   // true = web search + image extraction
   const [loading,        setLoading]        = useState(false)
   const [error,          setError]          = useState('')
   const [generated,      setGenerated]      = useState(null)
@@ -778,7 +779,26 @@ function ThemeStudioTab({ token, isAdmin }) {
     setLoading(true); setError(''); setGenerated(null); setWriteResult(null); setSelectedWp(0)
     if (previewing) { cancelPreview(); setPreviewing(false) }
     try {
-      const data = await generateTheme(name.trim(), description.trim(), token)
+      // Smart mode: web search → image extraction → real palette
+      // Classic mode: algorithmic color theory generation
+      const useSmartSearch = smartSearch
+      const endpoint = useSmartSearch
+        ? `${import.meta.env.VITE_AI_API_URL?.replace('/api/inference', '') ?? 'http://localhost:8001'}/jarvis/smart-theme`
+        : null
+
+      let data
+      if (useSmartSearch && endpoint) {
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: name.trim(), style: description.trim(), image_count: 6, extract_from: 3 }),
+          signal: AbortSignal.timeout(60000),
+        })
+        data = await res.json()
+      } else {
+        data = await generateTheme(name.trim(), description.trim(), token)
+      }
+
       if (!data.ok || !data.theme) {
         setError(data.error ?? 'Generation failed')
         return
@@ -853,7 +873,8 @@ function ThemeStudioTab({ token, isAdmin }) {
         <div>
           <h2 className={styles.studioTitle}>🎨 JARVIS Theme Studio</h2>
           <p className={styles.studioSubtitle}>
-            Describe any theme — JARVIS generates colors, fonts, and fetches real wallpapers from Unsplash, Pexels &amp; Pixabay.
+            Say the name or style → JARVIS searches the web → downloads images → extracts real colors → builds your theme.
+            Or use Classic mode for instant algorithmic generation.
           </p>
         </div>
       </div>
@@ -879,8 +900,31 @@ function ThemeStudioTab({ token, isAdmin }) {
           </div>
           <button className={styles.generateBtn} type="submit"
             disabled={loading || !name.trim() || !description.trim()}>
-            {loading ? <><span className={styles.spinner} />Generating…</> : '✨ Generate Theme'}
+            {loading
+              ? <><span className={styles.spinner} />Generating…</>
+              : smartSearch ? '🔍 Search & Generate' : '✨ Generate Theme'}
           </button>
+        </div>
+        {/* Smart search toggle */}
+        <div className={styles.smartToggleRow}>
+          <label className={styles.smartToggle}>
+            <input
+              type="checkbox"
+              checked={smartSearch}
+              onChange={e => setSmartSearch(e.target.checked)}
+              disabled={loading}
+            />
+            <span className={styles.smartToggleLabel}>
+              {smartSearch
+                ? '🔍 Smart Mode — web search + real image colors'
+                : '⚡ Classic Mode — instant algorithmic generation'}
+            </span>
+          </label>
+          {smartSearch && (
+            <span className={styles.smartHint}>
+              JARVIS will search the web, download images, and extract the actual dominant colors to build your theme.
+            </span>
+          )}
         </div>
       </form>
 
@@ -914,7 +958,28 @@ function ThemeStudioTab({ token, isAdmin }) {
                   {generated.params && (
                     <> · Hue: {generated.params.hue}° · Accent: {generated.params.accent_hue}°</>
                   )}
+                  {' '}
+                  <span className={`${styles.paletteBadge} ${generated.palette_source === 'image_extraction' ? styles.paletteBadgeImage : styles.paletteBadgeAlgo}`}>
+                    {generated.palette_source === 'image_extraction'
+                      ? `🎨 Real image palette (${generated.images_found ?? 0} images searched, ${generated.palettes_extracted ?? 0} analyzed)`
+                      : '⚡ Algorithmic palette'}
+                  </span>
                 </div>
+                {/* Extracted palette chips */}
+                {generated.palette?.length > 0 && (
+                  <div className={styles.extractedPalette} style={{ marginTop: '6px' }}>
+                    <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)' }}>Palette:</span>
+                    {generated.palette.map((hex, i) => (
+                      <div
+                        key={i}
+                        className={styles.paletteChip}
+                        style={{ background: hex }}
+                        title={hex}
+                        aria-label={`Color ${hex}`}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
             <ColorSwatch vars={generated.vars} />

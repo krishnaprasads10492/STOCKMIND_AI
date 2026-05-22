@@ -37,6 +37,8 @@ from engine.theme_generator import generate_theme, generate_theme_with_wallpaper
 from engine.jarvis_brain import JARVIS_BRAIN
 from engine.jarvis_agent import get_jarvis_agi
 from engine.agi_engine import AGI_ENGINE
+from engine.agi_envelope import AGI_ENVELOPE
+from engine.smart_theme_creator import create_theme_from_search, get_capabilities as get_theme_capabilities
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("stockmind-ai")
@@ -1242,4 +1244,104 @@ def agi_capabilities():
                     "ichimoku + fibonacci + supertrend + elliott wave + market profile + "
                     "order flow + smart money concepts + GARCH + hurst exponent + "
                     "fractal dimension + entropy + cross-timeframe momentum",
+    }
+
+
+# ── AGI Envelope endpoints ────────────────────────────────────────────────────
+
+@app.get("/agi-envelope/status")
+def agi_envelope_status():
+    """Full AGI Envelope status — all 5 layers."""
+    return AGI_ENVELOPE.get_full_status()
+
+
+@app.post("/agi-envelope/process")
+async def agi_envelope_process(body: dict):
+    """
+    Route a signal through the full AGI Envelope pipeline.
+    Exterior → AGI Shield → Main Functionality → Super-AGI Core → Response.
+    Blocks adversarial inputs, enforces safety constraints, routes to handler.
+    """
+    source = body.pop('_source', 'api')
+    try:
+        result = await AGI_ENVELOPE.process(body, source=source)
+        return result
+    except Exception as e:
+        logger.error(f"[AGIEnvelope] Process error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/agi-envelope/feedback")
+def agi_envelope_feedback(body: dict):
+    """Feed outcome back through the AGI envelope learning loop."""
+    AGI_ENVELOPE.feedback(
+        signal_type=body.get('signal_type', 'PREDICTION_REQ'),
+        correct=body.get('correct', False),
+        pattern_key=body.get('pattern_key', ''),
+    )
+    return {'ok': True}
+
+
+@app.get("/agi-envelope/layer/{layer_name}")
+def agi_envelope_layer(layer_name: str):
+    """Get detailed status of a specific layer."""
+    states = AGI_ENVELOPE.get_layer_states()
+    if layer_name not in states:
+        raise HTTPException(status_code=404, detail=f"Layer '{layer_name}' not found. Valid: {list(states.keys())}")
+    return {'layer': layer_name, **states[layer_name]}
+
+
+# ── Smart Theme Creator endpoints ─────────────────────────────────────────────
+
+class SmartThemeRequest(BaseModel):
+    name:        str  = Field(..., min_length=1, max_length=60)
+    style:       str  = Field(..., min_length=3, max_length=300)
+    image_count: int  = Field(default=6, ge=1, le=12)
+    extract_from: int = Field(default=3, ge=1, le=6)
+
+
+@app.post("/jarvis/smart-theme")
+async def jarvis_smart_theme(req: SmartThemeRequest):
+    """
+    JARVIS intelligent theme creation:
+    1. Web search for images matching name/style
+    2. Download thumbnails (in-memory)
+    3. Extract dominant color palette
+    4. Build complete CSS theme from real image colors
+    5. Return theme + wallpaper options
+
+    This is what the user asked for:
+    'I say the name/style → JARVIS does web search → gets images → builds theme from that'
+    """
+    try:
+        theme = await create_theme_from_search(
+            name=req.name.strip(),
+            style=req.style.strip(),
+            image_count=req.image_count,
+            extract_from_images=req.extract_from,
+        )
+        logger.info(f"[SmartTheme] Created '{req.name}' — "
+                    f"palette_source={theme.get('palette_source')}, "
+                    f"wallpapers={len(theme.get('wallpapers', []))}")
+        return {'ok': True, 'theme': theme}
+    except Exception as e:
+        logger.error(f"[SmartTheme] Error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/jarvis/smart-theme/capabilities")
+def jarvis_smart_theme_capabilities():
+    """Return what smart theme creation capabilities are available."""
+    caps = get_theme_capabilities()
+    return {
+        **caps,
+        'pipeline': [
+            '1. Web search (DuckDuckGo — no key needed)',
+            '2. Unsplash API (set UNSPLASH_API_KEY)',
+            '3. Pexels API (set PEXELS_API_KEY)',
+            '4. Pixabay API (set PIXABAY_API_KEY)',
+            '5. Download thumbnail (in-memory, never saved)',
+            '6. Extract dominant palette (requires Pillow)',
+            '7. Build CSS theme from real image colors',
+        ]
     }
