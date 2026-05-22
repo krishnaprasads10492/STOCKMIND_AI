@@ -19,7 +19,7 @@ const CIRCUIT_OPEN_DURATION_MS  = 20_000  // recover faster (20s vs 30s)
 function toAbsolute(url) {
   if (url.startsWith('http://') || url.startsWith('https://')) return url
   // Relative path — prepend the current origin (works in browser + Vite proxy)
-  const base = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'
+  const base = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:4098'
   return `${base}${url.startsWith('/') ? '' : '/'}${url}`
 }
 

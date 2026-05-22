@@ -82,7 +82,7 @@ All architecture decisions trace back to `StockMind-AI-Full-Requirements-Spec.md
 ---
 
 ## Key env vars
-- `VITE_AI_API_URL` — inference backend (default: `http://localhost:5000/api/inference`)
+- `VITE_AI_API_URL` — inference backend (default: `http://localhost:4098/api/inference`)
 - `VITE_DISCLAIMER_JURISDICTION` — IN | US | EU
 - `VITE_CONFIDENCE_FLOOR` / `VITE_CONFIDENCE_CEILING` — probability bounds (5 / 99)
 - `VITE_HMAC_VERIFY_KEY` — public key for prediction payload verification

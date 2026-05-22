@@ -41,7 +41,7 @@ import {
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 const DIST_DIR  = path.resolve(__dirname, '../dist')
-const PORT = process.env.PORT ?? 5000
+const PORT = process.env.PORT ?? 4098
 
 // ── DATA_PASSWORD ─────────────────────────────────────────────────────────────
 // Set via environment variable. Default is only for first-run convenience.
@@ -103,8 +103,7 @@ app.use(helmet({
                        'http://localhost:8001',
                        'https://query1.finance.yahoo.com',
                        'https://stream.binance.com',
-                       'https://finnhub.io'],
-      fontSrc:        ["'self'", 'data:'],
+                       'https://finnhub.io'],      fontSrc:        ["'self'", 'data:'],
       objectSrc:      ["'none'"],
       frameAncestors: ["'none'"],
       baseUri:        ["'self'"],
@@ -256,7 +255,7 @@ app.get('/api/growth-worker/events', (req, res) => {
 })
 
 // ── Serve built frontend (production / no-source-code mode) ──────────────────
-// In dev mode Vite serves the frontend separately on :3000.
+// In dev mode Vite serves the frontend separately on :4098.
 // In production (dist/ exists), Express serves everything on one port.
 if (fs.existsSync(DIST_DIR)) {
   app.use(express.static(DIST_DIR))

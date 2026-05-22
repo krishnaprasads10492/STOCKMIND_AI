@@ -35,7 +35,7 @@ That's it. This one command:
 - Starts the Node.js backend (port 5000)
 - Detects Python and starts the AI backend (port 8001) if available
 - Starts the outcome validator (checks predictions against live prices every 5s)
-- Opens the app at **http://localhost:5000**
+- Opens the app at **http://localhost:4098**
 
 ### Available start modes
 
@@ -132,7 +132,7 @@ The key is printed **once only** and never stored:
 
 ## 3. Logging In
 
-Open your browser and go to **http://localhost:3000**
+Open your browser and go to **http://localhost:4098**
 
 You will see the StockMind AI login screen.
 
@@ -195,8 +195,8 @@ There are no cookies and no JWT tokens.
 The frontend cannot connect to the backend. Check:
 
 1. Is `npm run dev` still running in your terminal?
-2. Is the backend on port 5000? Look for `[StockMind AI] Backend running on http://localhost:5000` in the terminal.
-3. Try opening http://localhost:5000/api/health in your browser — it should return JSON.
+2. Is the backend on port 5000? Look for `[StockMind AI] Backend running on http://localhost:4098` in the terminal.
+3. Try opening http://localhost:4098/api/health in your browser — it should return JSON.
 
 ### "Invalid credentials"
 
@@ -242,12 +242,12 @@ Generate key:           npm run keygen <username>
 Add user:               npm run adduser
 Run tests:              npm run test
 
-Frontend:               http://localhost:5000  (production)
-                        http://localhost:3000  (dev mode)
-Backend API:            http://localhost:5000
+Frontend:               http://localhost:4098  (production)
+                        http://localhost:4098  (dev mode)
+Backend API:            http://localhost:4098
 AI backend:             http://localhost:8001  (if Python available)
-Health check:           http://localhost:5000/api/health
-Validator status:       http://localhost:5000/api/validator/status
+Health check:           http://localhost:4098/api/health
+Validator status:       http://localhost:4098/api/validator/status
 
 Default admin:          admin / Admin@1234  (change immediately)
 Data password:          stockmind-local-dev-password  (set DATA_PASSWORD env var)

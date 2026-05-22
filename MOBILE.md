@@ -6,14 +6,14 @@
 The app is a fully installable PWA. No app store needed.
 
 **Android (Chrome, Edge, Samsung Internet)**
-1. Open `http://your-ip:5000` in Chrome on your phone
+1. Open `http://your-ip:4098` in Chrome on your phone
 2. Chrome shows "Add to Home Screen" banner automatically
 3. Tap → app installs like a native app with an icon on your home screen
 4. Opens full-screen, no browser chrome
 5. Works offline for cached pages
 
 **iOS (Safari only — Chrome on iOS can't install PWAs)**
-1. Open `http://your-ip:5000` in Safari
+1. Open `http://your-ip:4098` in Safari
 2. Tap the **Share** button (box with arrow)
 3. Scroll down → tap **"Add to Home Screen"**
 4. Tap **Add** — app installs with the StockMind icon
@@ -43,7 +43,7 @@ ipconfig   # Windows — look for "IPv4 Address" under your WiFi adapter
 # Start the server (it binds to all interfaces by default)
 node start.js --dev
 
-# On your phone: open http://192.168.x.x:5000
+# On your phone: open http://192.168.x.x:4098
 # (replace with your laptop's actual IP)
 ```
 

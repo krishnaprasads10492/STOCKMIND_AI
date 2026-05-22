@@ -106,7 +106,7 @@ You should see:
 ```
 [bootstrap] Seeding 1 user(s) from users-seed.json...
 [bootstrap] ✓ Created: yourname (admin)
-[StockMind AI] Backend → http://localhost:5000
+[StockMind AI] Backend → http://localhost:4098
 ```
 
 Keep this terminal open. The backend must stay running while you use the app.
@@ -127,7 +127,7 @@ app.use(express.static(path.join(__dirname2, '../dist')))
 app.get('*', (_req, res) => res.sendFile(path.join(__dirname2, '../dist/index.html')))
 ```
 
-Then open http://localhost:5000 in your browser.
+Then open http://localhost:4098 in your browser.
 
 **Option B — Use `serve` (simplest, no code change):**
 
@@ -136,7 +136,7 @@ npm install -g serve
 serve dist -p 3000
 ```
 
-Then open http://localhost:3000 in your browser.
+Then open http://localhost:4098 in your browser.
 
 **Option C — Use Python (if installed):**
 
@@ -145,7 +145,7 @@ cd dist
 python -m http.server 3000
 ```
 
-Then open http://localhost:3000 in your browser.
+Then open http://localhost:4098 in your browser.
 
 > ⚠ When using Option B or C, the frontend at port 3000 needs to reach the backend at port 5000. This works automatically because the built app calls `/api/...` relative URLs — but only if both are on the same origin. Use Option A (Express serves both) to avoid any cross-origin issues.
 
@@ -161,7 +161,7 @@ Your 12-digit key is printed once. Write it down.
 
 ### Step 8 — Log in
 
-Open your browser to http://localhost:5000 (or 3000 if using Option B/C).
+Open your browser to http://localhost:4098 (or 3000 if using Option B/C).
 
 1. Enter your username and password
 2. Enter the 12-digit key (format: XXXX-XXXX-XXXX)
@@ -175,7 +175,7 @@ If you have the full source code and want to run in development mode:
 
 ```bash
 npm install --legacy-peer-deps   # install all dependencies
-npm run dev                      # starts both frontend (:3000) and backend (:5000)
+npm run dev                      # starts both frontend (:4098) and backend (:4098)
 ```
 
 Then in a second terminal:
@@ -213,7 +213,7 @@ app.get(/^(?!\/api).*/, (_req, res) => {
 })
 ```
 
-Then everything runs on a single port (5000). Open http://localhost:5000.
+Then everything runs on a single port (5000). Open http://localhost:4098.
 
 ---
 
@@ -251,7 +251,7 @@ to:
 app.listen(PORT, '0.0.0.0', () => ...)
 ```
 
-Then on your phone, open: `http://192.168.x.x:5000` (use your machine's IP).
+Then on your phone, open: `http://192.168.x.x:4098` (use your machine's IP).
 
 ---
 
@@ -266,7 +266,7 @@ cd /d "C:\path\to\stockmind-ai"
 set DATA_PASSWORD=your-secure-password
 start "StockMind Backend" node server/index.js
 timeout /t 3
-start "" "http://localhost:5000"
+start "" "http://localhost:4098"
 ```
 
 2. Press `Win + R`, type `shell:startup`, press Enter

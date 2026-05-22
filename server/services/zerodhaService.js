@@ -22,7 +22,7 @@ import { writeSecure, readSecure } from '../storage/fileStore.js'
 
 const API_KEY      = process.env.ZERODHA_API_KEY      ?? process.env.VITE_ZERODHA_API_KEY ?? ''
 const API_SECRET   = process.env.ZERODHA_API_SECRET   ?? ''
-const REDIRECT_URL = process.env.ZERODHA_REDIRECT_URL ?? 'http://localhost:5000/api/zerodha/callback'
+const REDIRECT_URL = process.env.ZERODHA_REDIRECT_URL ?? 'http://localhost:4098/api/zerodha/callback'
 
 // ── Token management ──────────────────────────────────────────────────────────
 
