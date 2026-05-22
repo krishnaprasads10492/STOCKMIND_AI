@@ -23,7 +23,8 @@
     "prepare": "husky install",
     "keygen": "node server/keygen/generate.js",
     "adduser": "node server/keygen/addUser.js",
-    "reseed": "node server/keygen/reseed.js"
+    "reseed": "node server/keygen/reseed.js",
+    "migrate:mongo": "node server/scripts/migrateToMongo.js"
   },
   "lint-staged": {
     "src/**/*.{js,jsx,css,md}": [
@@ -38,6 +39,7 @@
     "express": "4.21.2",
     "express-rate-limit": "7.5.0",
     "helmet": "8.0.0",
+    "mongodb": "^6.11.0",
     "multer": "1.4.5-lts.1",
     "react": "19.2.0",
     "react-dom": "19.2.0",

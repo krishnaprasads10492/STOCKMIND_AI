@@ -37,6 +37,7 @@ import { rebuildPredictionIndex } from './services/predictionStore.js'
 import { getIntegrationStatus } from './config/integrations.js'
 import { CACHE } from './storage/memCache.js'
 import { getSessionRecord, getMarketContext, getSessionHistory, cleanupOldSessions } from './services/marketSessionStore.js'
+import { connectMongo, getMongoStatus } from './services/mongoService.js'
 import {
   startAIGrowthWorker, stopAIGrowthWorker, pauseAIGrowthWorker, resumeAIGrowthWorker,
   getGrowthWorkerStatus, getUpgradeProposals, approveProposal, dismissProposal,
@@ -57,6 +58,13 @@ async function initSecurity() {
   await initEncryption(DATA_PASSWORD)
   initAuditLog(DATA_PASSWORD)
   await DB.init()
+  // Connect MongoDB Atlas if URI is configured
+  if (process.env.MONGODB_ATLAS_URI || process.env.MONGODB_URI) {
+    connectMongo().then(db => {
+      if (db) console.log('[StockMind AI] 🍃 MongoDB Atlas connected')
+      else    console.warn('[StockMind AI] ⚠ MongoDB unavailable — falling back to local storage')
+    }).catch(() => {})
+  }
 }
 
 // ── Bootstrap from users-seed.json ───────────────────────────────────────────
@@ -207,7 +215,11 @@ app.get('/api/audit/query',  (req, res) => {
 })
 
 // ── DB health ─────────────────────────────────────────────────────────────────
-app.get('/api/db/health', async (req, res) => res.json(await DB.healthCheck()))
+app.get('/api/db/health', async (req, res) => {
+  const adapterHealth = await DB.healthCheck()
+  const mongoStatus   = getMongoStatus()
+  res.json({ ...adapterHealth, mongoAtlas: mongoStatus })
+})
 
 // ── Storage stats ─────────────────────────────────────────────────────────────
 app.get('/api/storage/stats', (req, res) => res.json(getStorageStats()))

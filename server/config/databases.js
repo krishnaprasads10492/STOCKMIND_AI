@@ -90,26 +90,32 @@ export const POSTGRES_CONFIG = {
 
 // ── MongoDB config ────────────────────────────────────────────────────────────
 
+const ATLAS_URI = env('MONGODB_ATLAS_URI', '')
+const MONGO_URI  = env('MONGODB_URI', 'mongodb://localhost:27017/stockmind')
+
 export const MONGODB_CONFIG = {
-  enabled:  envBool('MONGODB_ENABLED', false),
-  uri:      env('MONGODB_URI', 'mongodb://localhost:27017/stockmind'),
+  // Auto-enable when Atlas URI is set — no need to set MONGODB_ENABLED=true manually
+  enabled:  envBool('MONGODB_ENABLED', !!ATLAS_URI),
+  uri:      MONGO_URI,
   database: env('MONGODB_DB', 'stockmind'),
   options: {
     maxPoolSize:       envInt('MONGODB_POOL_MAX', 10),
     minPoolSize:       envInt('MONGODB_POOL_MIN', 2),
-    serverSelectionTimeoutMS: envInt('MONGODB_TIMEOUT_MS', 5000),
+    serverSelectionTimeoutMS: envInt('MONGODB_TIMEOUT_MS', 8000),
     socketTimeoutMS:   envInt('MONGODB_SOCKET_TIMEOUT_MS', 45000),
     connectTimeoutMS:  envInt('MONGODB_CONNECT_TIMEOUT_MS', 10000),
     retryWrites:       true,
+    retryReads:        true,
     w:                 'majority',
+    compressors:       ['snappy', 'zstd'],
     // TLS
     tls:               envBool('MONGODB_TLS', false),
     tlsCAFile:         env('MONGODB_TLS_CA', ''),
     tlsCertificateKeyFile: env('MONGODB_TLS_CERT', ''),
   },
   // Atlas connection string takes precedence
-  atlasUri: env('MONGODB_ATLAS_URI', ''),
-  // Per-collection encryption (field-level)
+  atlasUri: ATLAS_URI,
+  // Per-collection encryption (field-level) — optional extra layer
   fieldEncryption: envBool('MONGODB_FIELD_ENCRYPT', false),
   encryptionKey:   env('MONGODB_ENCRYPTION_KEY', ''),
 }
@@ -152,25 +158,21 @@ export const REDIS_CONFIG = {
 
 // ── Data routing configuration ────────────────────────────────────────────────
 
-/**
- * Data routing determines which backend stores each data category.
- * Options: 'local' | 'sqlite' | 'postgres' | 'mongodb' | 'redis'
- *
- * Rules:
- * - A backend must be enabled to be used
- * - Falls back to 'local' if the configured backend is disabled
- * - 'local' is ALWAYS available as the ultimate fallback
- */
+// When MONGODB_ATLAS_URI is set, automatically route all data to MongoDB.
+// Individual routes can still be overridden via DB_* env vars.
+const _mongoDefault = ATLAS_URI ? 'mongodb' : 'local'
+
 export const DATA_ROUTING = {
-  users:       env('DB_USERS',       'local'),
-  predictions: env('DB_PREDICTIONS', 'local'),
-  sessions:    env('DB_SESSIONS',    'local'),
-  analytics:   env('DB_ANALYTICS',   'local'),
-  audit:       env('DB_AUDIT',       'local'),
-  cache:       env('DB_CACHE',       'local'),
-  ami:         env('DB_AMI',         'local'),
-  strategies:  env('DB_STRATEGIES',  'local'),
-  backtest:    env('DB_BACKTEST',    'local'),
+  users:          env('DB_USERS',          _mongoDefault),
+  predictions:    env('DB_PREDICTIONS',    _mongoDefault),
+  sessions:       env('DB_SESSIONS',       _mongoDefault),
+  analytics:      env('DB_ANALYTICS',      _mongoDefault),
+  audit:          env('DB_AUDIT',          'local'),    // audit log always local (HMAC chain)
+  cache:          env('DB_CACHE',          'local'),    // cache always local (in-memory LRU)
+  ami:            env('DB_AMI',            _mongoDefault),
+  strategies:     env('DB_STRATEGIES',     _mongoDefault),
+  backtest:       env('DB_BACKTEST',       _mongoDefault),
+  market_sessions: env('DB_MARKET_SESSIONS', _mongoDefault),
 }
 
 // ── Active backends summary ───────────────────────────────────────────────────
