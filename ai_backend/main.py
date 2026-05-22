@@ -36,6 +36,7 @@ from engine.jarvis_core import JARVIS_INSTANCE
 from engine.theme_generator import generate_theme, generate_theme_with_wallpapers
 from engine.jarvis_brain import JARVIS_BRAIN
 from engine.jarvis_agent import get_jarvis_agi
+from engine.agi_engine import AGI_ENGINE
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("stockmind-ai")
@@ -74,6 +75,7 @@ class PredictionRequest(BaseModel):
     minGrade:        Literal["A+", "A", "B", "C", "D"] = "C"
     predictionMode:  Literal["learning", "realworld", "both"] = "both"
     adaptiveWeight:  float = Field(default=1.0, ge=0.5, le=2.0)
+    signalCount:     int   = Field(default=16, ge=1, le=50)
     # Real OHLCV from Node.js backend (list of {date,open,high,low,close,volume})
     ohlcv:           Optional[list[dict]] = None
     # Options-specific
@@ -88,6 +90,9 @@ class PredictionRequest(BaseModel):
     # Derivative recommender
     isDerivRec:      bool = False
     isIndexDerivRec: bool = False
+    # AGI options
+    agi_enhance:     bool = True    # apply AGI enhancement layer
+    multi_horizon:   bool = False   # include multi-horizon predictions
 
 
 class BacktestRequest(BaseModel):
@@ -131,19 +136,56 @@ def health():
 @app.post("/predict")
 def predict(req: PredictionRequest):
     try:
-        signals = generate_signals(req.model_dump())
-        return {
+        params = req.model_dump()
+        signals = generate_signals(params)
+
+        # AGI enhancement on first signal (as representative)
+        agi_status = None
+        if req.agi_enhance and signals:
+            try:
+                from engine.features import compute_features
+                from engine.data_fetcher import get_ohlcv
+                df, _ = get_ohlcv(params)
+                feats  = compute_features(df)
+                # Enhance the first signal's metadata
+                representative = signals[0]
+                enhanced = AGI_ENGINE.enhance_prediction(
+                    base_result={
+                        "probability":  representative["probability"] / 100,
+                        "reasons":      representative.get("reasons", []),
+                        "epistemic":    0.08,
+                        "agreement":    0.75,
+                    },
+                    features=feats,
+                    symbol=req.symbol,
+                    regime=req.predictionMode,
+                )
+                agi_status = {
+                    "detailed_regime":  enhanced.get("detailed_regime"),
+                    "regime_accuracy":  enhanced.get("regime_accuracy"),
+                    "anomaly_score":    enhanced.get("anomaly_score"),
+                    "is_anomalous":     enhanced.get("is_anomalous"),
+                    "multi_horizon":    enhanced.get("multi_horizon") if req.multi_horizon else None,
+                    "regime_note":      enhanced.get("regime_note"),
+                }
+            except Exception as e:
+                logger.warning(f"[AGI] Enhancement failed (non-fatal): {e}")
+
+        result = {
             "requestId":     uuid.uuid4().hex,
             "symbol":        req.symbol,
             "exchange":      req.exchange,
             "generatedAt":   int(time.time() * 1000),
-            "modelVersion":  "v0.2.0-ensemble",
+            "modelVersion":  "v0.5.1-agi-ensemble",
             "predictionMode": req.predictionMode,
             "adaptiveWeight": req.adaptiveWeight,
             "signals":       signals,
             "suppressedCount": sum(1 for s in signals if s.get("suppressed")),
             "dataSource":    signals[0].get("dataSource", "unknown") if signals else "unknown",
         }
+        if agi_status:
+            result["agi"] = agi_status
+        return result
     except Exception as e:
         logger.error(f"Prediction error for {req.symbol}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -1056,4 +1098,148 @@ def image_capabilities():
         "install_hint": "pip install Pillow pytesseract" if not PIL_AVAILABLE else (
             "Install Tesseract OCR: https://github.com/tesseract-ocr/tesseract" if not TESSERACT_AVAILABLE else "All local capabilities available"
         ),
+    }
+
+
+# ── AGI Engine endpoints ──────────────────────────────────────────────────────
+
+class AGIOutcomeRequest(BaseModel):
+    symbol:        str
+    regime:        str  = "trending_bull"
+    probability:   float = Field(..., ge=0.0, le=1.0)
+    was_correct:   bool
+    strategy:      str  = "default"
+    horizon:       str  = "1d"
+
+
+class AGIEnhanceRequest(BaseModel):
+    symbol:        str  = Field(..., min_length=1, max_length=20)
+    exchange:      str  = Field(default="NSE")
+    base_prob:     float = Field(..., ge=0.0, le=1.0)
+    ohlcv:         Optional[list[dict]] = None
+    base_price:    Optional[float] = None
+    multi_horizon: bool = True
+
+
+@app.get("/agi/status")
+def agi_status():
+    """Full AGI engine status: regime memory, anomaly log, self-reflection, leading signals."""
+    return AGI_ENGINE.get_status()
+
+
+@app.post("/agi/record-outcome")
+def agi_record_outcome(req: AGIOutcomeRequest):
+    """Feed resolved prediction outcomes back to the AGI engine for learning."""
+    AGI_ENGINE.record_outcome(
+        req.symbol, req.regime, req.probability,
+        req.was_correct, req.strategy, req.horizon
+    )
+    return {"ok": True, "message": f"Outcome recorded for {req.symbol} in {req.regime} regime"}
+
+
+@app.post("/agi/enhance")
+async def agi_enhance(req: AGIEnhanceRequest):
+    """
+    Enhance a probability estimate with AGI capabilities:
+    - Transfer learning from similar instruments
+    - Multi-horizon projections
+    - Anomaly detection
+    - Regime memory advisory
+    """
+    try:
+        from engine.data_fetcher import get_ohlcv
+        from engine.features import compute_features
+
+        params = {"symbol": req.symbol, "exchange": req.exchange,
+                  "ohlcv": req.ohlcv, "basePrice": req.base_price or 1000}
+        df, _ = get_ohlcv(params)
+        feats  = compute_features(df)
+
+        base_result = {
+            "probability": req.base_prob,
+            "reasons":     [],
+            "epistemic":   0.1,
+            "agreement":   0.7,
+        }
+
+        enhanced = AGI_ENGINE.enhance_prediction(
+            base_result, feats, req.symbol, "trending"
+        )
+
+        if not req.multi_horizon:
+            enhanced.pop("multi_horizon", None)
+
+        return enhanced
+    except Exception as e:
+        logger.error(f"[AGI] Enhance error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/agi/correlate")
+def agi_correlate(body: dict):
+    """Update the correlation network with a price observation."""
+    symbol = body.get("symbol", "")
+    price  = float(body.get("price", 0))
+    if symbol and price > 0:
+        AGI_ENGINE.correlations.update(symbol, price)
+    related = AGI_ENGINE.correlations.get_top_correlated(symbol)
+    return {"ok": True, "symbol": symbol, "top_correlated": related}
+
+
+@app.get("/agi/self-reflection")
+def agi_self_reflection():
+    """Get the AI's self-assessment: calibration curve, biases, accuracy."""
+    return AGI_ENGINE.self_reflection.get_report()
+
+
+@app.get("/agi/anomalies")
+def agi_anomalies():
+    """Get recent anomaly detections."""
+    return {
+        "anomalies": AGI_ENGINE.anomaly.get_recent_anomalies(20),
+        "detector_ready": len(AGI_ENGINE.anomaly._feature_history) >= 30
+    }
+
+
+@app.get("/agi/regime-memory")
+def agi_regime_memory():
+    """Get regime performance history and best strategies per regime."""
+    return AGI_ENGINE.regime_memory.get_summary()
+
+
+@app.post("/agi/multi-horizon")
+def agi_multi_horizon(body: dict):
+    """Get multi-horizon probability projections from a base probability."""
+    base_prob = float(body.get("base_prob", 0.5))
+    regime    = body.get("regime", "trending")
+    epistemic = float(body.get("epistemic", 0.1))
+    horizons  = AGI_ENGINE.multi_horizon.predict_all_horizons(base_prob, regime, epistemic)
+    return {"base_prob": base_prob, "regime": regime, "horizons": horizons}
+
+
+@app.get("/agi/capabilities")
+def agi_capabilities():
+    """Return the full list of AGI capabilities."""
+    return {
+        "version": "v0.5.1-agi",
+        "modules": {
+            "regime_memory":    "Remembers which strategies work in each market regime",
+            "causal_filter":    "Distinguishes leading vs lagging signals",
+            "transfer_learning":"Applies knowledge from correlated instruments",
+            "multi_horizon":    "Simultaneous 5m/1h/1d/1w/1mo predictions",
+            "anomaly_detection":"Flags unusual market conditions",
+            "correlation_net":  "Tracks inter-market correlations in real-time",
+            "self_reflection":  "Evaluates own prediction quality and biases",
+            "stacking_ensemble":"8-model stacking with adaptive online weights",
+            "uncertainty_quant":"Epistemic + aleatoric uncertainty bounds",
+            "online_learning":  "Updates from resolved outcomes without retraining",
+        },
+        "models": [
+            "LightGBM", "XGBoost", "LSTM", "RandomForest",
+            "MLP-Neural-Network", "OnlineSGD", "Regime-Aware", "FinBERT-Sentiment"
+        ],
+        "features": "~150 features: price action + volatility + trend + volume + "
+                    "ichimoku + fibonacci + supertrend + elliott wave + market profile + "
+                    "order flow + smart money concepts + GARCH + hurst exponent + "
+                    "fractal dimension + entropy + cross-timeframe momentum",
     }

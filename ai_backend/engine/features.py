@@ -187,7 +187,58 @@ def compute_features(df: pd.DataFrame) -> np.ndarray:
     feats["month_sin"]   = np.sin(2 * np.pi * now.month / 12)
     feats["month_cos"]   = np.cos(2 * np.pi * now.month / 12)
 
+    # ── Bucket 6 Extension: Entropy & Fractality ──────────────────────────────
+    # Hurst exponent proxy — >0.5 = trending, <0.5 = mean-reverting
+    feats["hurst_exp"]       = _hurst_proxy(c)
+    # Approximate entropy of returns — low = predictable, high = chaotic
+    feats["return_entropy"]  = _approx_entropy(np.diff(np.log(c[-20:] + 1e-9)))
+    # Fractal dimension proxy (Higuchi method, simplified)
+    feats["fractal_dim"]     = _fractal_dim_proxy(c[-30:] if len(c) >= 30 else c)
+    # Log-return skewness (20-bar)
+    rets20 = np.diff(np.log(c[-21:] + 1e-9)) if len(c) >= 21 else np.zeros(1)
+    feats["return_skew20"]   = float(np.mean((rets20 - np.mean(rets20))**3) / (np.std(rets20)**3 + 1e-9))
+    # Log-return kurtosis (20-bar)
+    feats["return_kurt20"]   = float(np.mean((rets20 - np.mean(rets20))**4) / (np.std(rets20)**4 + 1e-9)) - 3.0
+
+    # ── Bucket 7: Cross-timeframe momentum alignment ──────────────────────────
+    def mom(n): return (c[-1] - c[-n]) / (c[-n] + 1e-9) if len(c) >= n else 0.0
+    feats["mom_3"]  = mom(3)
+    feats["mom_5"]  = mom(5)
+    feats["mom_10"] = mom(10)
+    feats["mom_20"] = mom(20)
+    feats["mom_60"] = mom(60) if len(c) >= 60 else 0.0
+    # Momentum alignment score — are short and long-term momenta in the same direction?
+    moms = [feats["mom_3"], feats["mom_5"], feats["mom_10"], feats["mom_20"]]
+    feats["mom_alignment"] = float(np.sign(np.mean(moms)) * np.mean(np.abs(moms)))
+
+    # ── Bucket 8: Microstructure proxies ─────────────────────────────────────
+    # High-Low efficiency ratio (how directional is each bar)
+    if len(c) >= 10:
+        net_move  = abs(c[-1] - c[-10])
+        path_len  = np.sum(np.abs(np.diff(c[-10:])))
+        feats["efficiency_ratio_10"] = float(net_move / (path_len + 1e-9))
+    else:
+        feats["efficiency_ratio_10"] = 0.5
+    # Spread proxy: (high - low) / close
+    feats["spread_proxy"]  = (h[-1] - l[-1]) / (c[-1] + 1e-9)
+    # Close position in bar (0=low, 1=high) — buying pressure
+    feats["close_in_bar"]  = (c[-1] - l[-1]) / (h[-1] - l[-1] + 1e-9)
+
     return np.array(list(feats.values()), dtype=np.float32)
+
+
+def compute_full_features(df: pd.DataFrame) -> np.ndarray:
+    """
+    Compute ALL features: base (Bucket 1-8 extension) + advanced (Ichimoku, Fib, etc.).
+    Returns a unified ~150-feature vector for the full AGI ensemble.
+    """
+    base = compute_features(df)
+    try:
+        from .advanced_features import compute_advanced_features
+        adv = compute_advanced_features(df)
+        return np.concatenate([base, adv]).astype(np.float32)
+    except Exception:
+        return base
 
 
 def get_feature_names() -> list[str]:
@@ -261,3 +312,71 @@ def _adx(h: np.ndarray, l: np.ndarray, c: np.ndarray, period: int = 14) -> float
     ndi = 100 * np.mean(ndm) / (atr + 1e-9)
     dx  = 100 * abs(pdi - ndi) / (pdi + ndi + 1e-9)
     return float(dx)
+
+
+def _hurst_proxy(c: np.ndarray, lags: int = 20) -> float:
+    """Fast Hurst exponent via R/S analysis. 0.5=random, >0.5=trending, <0.5=mean-reverting."""
+    if len(c) < lags + 2:
+        return 0.5
+    try:
+        rets = np.diff(np.log(c + 1e-9))
+        rs_vals = []
+        for lag in range(2, min(lags, len(rets) // 2)):
+            sub = rets[-lag*2:-lag] if len(rets) >= lag * 2 else rets[-lag:]
+            if len(sub) < 2:
+                continue
+            mean_sub = np.mean(sub)
+            dev  = np.cumsum(sub - mean_sub)
+            R    = np.max(dev) - np.min(dev)
+            S    = np.std(sub)
+            if S > 0:
+                rs_vals.append(np.log(R / S + 1e-9) / np.log(lag))
+        return float(np.clip(np.mean(rs_vals) if rs_vals else 0.5, 0.0, 1.0))
+    except Exception:
+        return 0.5
+
+
+def _approx_entropy(series: np.ndarray, m: int = 2, r_ratio: float = 0.2) -> float:
+    """Approximate entropy — lower means more predictable/regular."""
+    if len(series) < m + 2:
+        return 0.5
+    try:
+        r = r_ratio * float(np.std(series))
+        if r <= 0:
+            return 0.0
+        N = len(series)
+        def phi(m_):
+            templates = np.array([series[i:i+m_] for i in range(N - m_)])
+            counts = np.array([np.sum(np.max(np.abs(templates - t), axis=1) <= r) for t in templates])
+            return np.mean(np.log(counts / (N - m_) + 1e-9))
+        return float(np.abs(phi(m) - phi(m + 1)))
+    except Exception:
+        return 0.5
+
+
+def _fractal_dim_proxy(c: np.ndarray) -> float:
+    """Simplified Higuchi fractal dimension proxy (normalised 1-2)."""
+    if len(c) < 4:
+        return 1.5
+    try:
+        n = len(c)
+        k_max = min(8, n // 2)
+        lk = []
+        for k in range(1, k_max + 1):
+            lengths = []
+            for m in range(1, k + 1):
+                idxs = np.arange(m - 1, n, k)
+                vals = c[idxs]
+                if len(vals) < 2:
+                    continue
+                length = np.sum(np.abs(np.diff(vals))) * (n - 1) / (k * len(vals))
+                lengths.append(length)
+            if lengths:
+                lk.append((np.log(k), np.log(np.mean(lengths) + 1e-9)))
+        if len(lk) < 2:
+            return 1.5
+        ks, ls = zip(*lk)
+        slope = np.polyfit(ks, ls, 1)[0]
+        return float(np.clip(-slope, 1.0, 2.0))
+    except Exception:
+        return 1.5
