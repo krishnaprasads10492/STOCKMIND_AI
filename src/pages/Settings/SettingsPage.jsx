@@ -5,7 +5,8 @@ import { useThemeStore } from '@store/themeStore.js'
 import { updatePreferencesApi } from '@services/backendClient.js'
 import { apiFetch } from '@services/apiClient.js'
 import { activateGhostMode, wipeServerData } from '@utils/ghostMode.js'
-import { THEMES, THEME_KEYS } from '@utils/themes.js'import styles from './SettingsPage.module.css'
+import { THEMES, THEME_KEYS } from '@utils/themes.js'
+import styles from './SettingsPage.module.css'
 
 export default function SettingsPage() {
   const { user, updatePreferences, token } = useAuthStore()
