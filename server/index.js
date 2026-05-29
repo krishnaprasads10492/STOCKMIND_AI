@@ -42,7 +42,7 @@ import { connectMongo, getMongoStatus } from './services/mongoService.js'
 import {
   startAIGrowthWorker, stopAIGrowthWorker, pauseAIGrowthWorker, resumeAIGrowthWorker,
   getGrowthWorkerStatus, getUpgradeProposals, approveProposal, dismissProposal,
-  addGrowthWorkerSSEClient,
+  addGrowthWorkerSSEClient, getAccuracyMatrix,
 } from './services/aiGrowthWorker.js'
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
@@ -290,6 +290,10 @@ app.get('/api/growth-worker/proposals', (req, res) => {
   const limit = Math.min(Number(req.query.limit ?? 20), 50)
   res.json({ proposals: getUpgradeProposals(limit) })
 })
+app.get('/api/growth-worker/accuracy-matrix', (req, res) => {
+  const { symbol, timeframe, instrType } = req.query
+  res.json({ matrix: getAccuracyMatrix({ symbol, timeframe, instrType }) })
+})
 app.post('/api/growth-worker/start', (req, res) => {
   startAIGrowthWorker()
   res.json({ ok: true, status: getGrowthWorkerStatus() })
@@ -359,7 +363,8 @@ initSecurity()
       startCleanupScheduler(retentionDays, 24)
       // Clean up old market session data once at startup
       cleanupOldSessions()
-      if (process.env.AI_GROWTH_WORKER_ENABLED === 'true') startAIGrowthWorker()
+      // AI Growth Worker — always auto-starts. Stop via API or Settings page.
+      startAIGrowthWorker()
     })
   })
   .catch(err => { console.error('[StockMind AI] Fatal startup:', err); process.exit(1) })
