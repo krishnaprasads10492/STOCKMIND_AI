@@ -1,0 +1,135 @@
+# /config/ai_routing_manifest.yaml
+# Dynamic Model Router Engine — JARVIS-X Blueprint Section III
+# Dynamic Infrastructure Orchestrator (DIO)
+# Routes requests to optimal compute tier based on cost/performance/capability
+
+system_mode: HYBRID_AGI_ENVELOPE
+system_identity: JARVIS-X
+version: "1.0.0"
+
+# ── Model Providers ───────────────────────────────────────────────────────────
+
+model_providers:
+
+  # Tier 0: Local — free, always available, baseline capability
+  local_engine:
+    provider: "ollama"
+    base_url: "http://localhost:11434"
+    default_model: "llama3.2"
+    fallback_model: "llama3:8b"
+    status: "ACTIVE_FALLBACK"
+    cost_per_1k_tokens: 0.0
+    latency_ms: 200
+    capability_score: 0.60
+    use_for: ["simple_queries", "theme_generation", "code_explanation"]
+
+  # Tier 1: Cloud Fast — low cost, fast, good for daily/weekly analysis
+  cloud_fast_deepseek:
+    provider: "deepseek"
+    base_url: "https://api.deepseek.com/v1"
+    default_model: "deepseek-chat"
+    env_key: "DEEPSEEK_API_KEY"
+    status: "ACTIVE"
+    cost_per_1k_tokens: 0.07
+    latency_ms: 800
+    capability_score: 0.82
+    use_for: ["daily_analysis", "strategy_scoring", "pattern_recognition"]
+
+  cloud_fast_groq:
+    provider: "groq"
+    base_url: "https://api.groq.com/openai/v1"
+    default_model: "llama-3.3-70b-versatile"
+    env_key: "GROQ_API_KEY"
+    status: "ACTIVE"
+    cost_per_1k_tokens: 0.0   # free tier
+    latency_ms: 400
+    capability_score: 0.80
+    use_for: ["intraday_analysis", "fast_sentiment", "quick_predictions"]
+
+  cloud_fast_gemini:
+    provider: "gemini"
+    base_url: "https://generativelanguage.googleapis.com/v1beta"
+    default_model: "gemini-1.5-flash"
+    env_key: "GEMINI_API_KEY"
+    status: "ACTIVE"
+    cost_per_1k_tokens: 0.075
+    latency_ms: 600
+    capability_score: 0.83
+    use_for: ["multimodal_analysis", "chart_reading", "news_synthesis"]
+
+  # Tier 2: Cloud Premium — higher cost, maximum capability, strategic analysis
+  cloud_prime_reasoning:
+    provider: "anthropic"
+    base_url: "https://api.anthropic.com/v1"
+    default_model: "claude-3-5-sonnet-20241022"
+    env_key: "ANTHROPIC_API_KEY"
+    status: "ACTIVE"
+    cost_per_1k_tokens: 3.0
+    latency_ms: 2000
+    capability_score: 0.98
+    use_for: ["strategic_macro", "complex_reasoning", "sec_filing_analysis", "long_term_allocation"]
+
+  cloud_prime_openai:
+    provider: "openai"
+    base_url: "https://api.openai.com/v1"
+    default_model: "gpt-4o"
+    env_key: "OPENAI_API_KEY"
+    status: "ACTIVE"
+    cost_per_1k_tokens: 2.5
+    latency_ms: 1500
+    capability_score: 0.97
+    use_for: ["code_generation", "complex_analysis", "vision_tasks"]
+
+# ── Routing Rules (DIO — Dynamic Infrastructure Orchestrator) ─────────────────
+
+routing_rules:
+
+  # Intraday (4-hour) — speed critical, use fast local/cloud
+  intraday:
+    horizon: "4h"
+    primary:  "cloud_fast_groq"
+    fallback: "local_engine"
+    trigger:  "anomaly_spike"
+    burst_to: "cloud_fast_deepseek"
+    data_sources: ["spot_order_books", "social_streams", "breaking_headlines"]
+    wealth_objective: "Isolate retail portfolios against intra-day flash corrections"
+
+  # Daily & Weekly — balanced cost/performance
+  daily_weekly:
+    horizon: "1d_1w"
+    primary:  "cloud_fast_deepseek"
+    fallback: "cloud_fast_groq"
+    trigger:  "scheduled"
+    data_sources: ["macro_averages", "thematic_divergences", "corporate_sentiment"]
+    wealth_objective: "Calculate entry ranges to minimize accumulation costs"
+
+  # Strategic Macro — maximum capability, premium models
+  strategic_macro:
+    horizon: "long_term"
+    primary:  "cloud_prime_reasoning"
+    fallback: "cloud_prime_openai"
+    trigger:  "weekly_scheduled"
+    data_sources: ["sec_filings", "central_bank_transcripts", "cross_industry_revenue"]
+    wealth_objective: "Track systemic secular market rotations for wealth compounding"
+
+  # Default fallback chain
+  default:
+    chain: ["cloud_fast_groq", "cloud_fast_deepseek", "cloud_fast_gemini", "local_engine"]
+
+# ── Cost Budget Controls ──────────────────────────────────────────────────────
+
+budget_controls:
+  daily_token_limit: 500000        # tokens per day across all providers
+  daily_cost_limit_usd: 5.0        # hard cap — admin controlled
+  alert_threshold_pct: 80          # alert when 80% of budget used
+  auto_downgrade_on_budget: true   # switch to cheaper tier when near limit
+
+# ── Safety Constraints ────────────────────────────────────────────────────────
+
+safety:
+  read_only_isolation: true
+  no_trade_execution:  true
+  lpm_threshold:       0.92
+  capital_preservation_priority: true
+  privacy_mask_enabled: true
+  adversarial_detection: true

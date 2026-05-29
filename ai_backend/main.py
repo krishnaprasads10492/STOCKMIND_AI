@@ -39,6 +39,9 @@ from engine.jarvis_agent import get_jarvis_agi
 from engine.agi_engine import AGI_ENGINE
 from engine.agi_envelope import AGI_ENVELOPE
 from engine.smart_theme_creator import create_theme_from_search, get_capabilities as get_theme_capabilities
+from engine.jarvis_x_core import JARVIS_X
+from engine.unified_data_hub import DATA_HUB
+from engine.dynamic_router import DIO
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("stockmind-ai")
@@ -139,29 +142,56 @@ def health():
 def predict(req: PredictionRequest):
     try:
         params = req.model_dump()
+
+        # ── Zero-Trust validation ──────────────────────────────────────────
+        if req.ohlcv:
+            validated = DATA_HUB.fusion_gate.process({"ohlcv": req.ohlcv}, source="node_backend")
+            if validated is None:
+                raise HTTPException(status_code=422, detail="Data validation failed — Zero-Trust Fusion Gate rejected input")
+
         signals = generate_signals(params)
 
-        # AGI enhancement on first signal (as representative)
+        # ── AGI + JARVIS-X enhancement ────────────────────────────────────
         agi_status = None
+        jarvis_x_result = None
+
         if req.agi_enhance and signals:
             try:
                 from engine.features import compute_features
                 from engine.data_fetcher import get_ohlcv
                 df, _ = get_ohlcv(params)
                 feats  = compute_features(df)
-                # Enhance the first signal's metadata
-                representative = signals[0]
+
+                # Fuse with sentiment and macro data
+                fused_feats = DATA_HUB.fuse_features(feats, req.symbol)
+
+                # AGI enhancement
                 enhanced = AGI_ENGINE.enhance_prediction(
                     base_result={
-                        "probability":  representative["probability"] / 100,
-                        "reasons":      representative.get("reasons", []),
+                        "probability":  signals[0]["probability"] / 100,
+                        "reasons":      signals[0].get("reasons", []),
                         "epistemic":    0.08,
                         "agreement":    0.75,
                     },
-                    features=feats,
+                    features=fused_feats,
                     symbol=req.symbol,
                     regime=req.predictionMode,
                 )
+
+                # JARVIS-X LPM processing
+                horizon_probs = enhanced.get("multi_horizon", {})
+                jarvis_result = JARVIS_X.process_signals(
+                    signals=signals,
+                    horizon_probs=horizon_probs,
+                    drawdown_pct=0.0,
+                    sentiment=DATA_HUB.sentiment.get_symbol_sentiment(req.symbol),
+                    regime=enhanced.get("detailed_regime", "trending_bull"),
+                )
+
+                # Use JARVIS-X processed signals (with LPM scaling + plain English)
+                if jarvis_result.get("signals"):
+                    signals = jarvis_result["signals"]
+
                 agi_status = {
                     "detailed_regime":  enhanced.get("detailed_regime"),
                     "regime_accuracy":  enhanced.get("regime_accuracy"),
@@ -170,15 +200,22 @@ def predict(req: PredictionRequest):
                     "multi_horizon":    enhanced.get("multi_horizon") if req.multi_horizon else None,
                     "regime_note":      enhanced.get("regime_note"),
                 }
+                jarvis_x_result = {
+                    "lpm_ps":       jarvis_result.get("lpm_ps"),
+                    "lpm_active":   jarvis_result.get("lpm_active"),
+                    "coherence":    jarvis_result.get("coherence"),
+                    "asi_level":    jarvis_result.get("asi_level"),
+                    "compute_tier": jarvis_result.get("compute_tier"),
+                }
             except Exception as e:
-                logger.warning(f"[AGI] Enhancement failed (non-fatal): {e}")
+                logger.warning(f"[JARVIS-X] Enhancement failed (non-fatal): {e}")
 
         result = {
             "requestId":     uuid.uuid4().hex,
             "symbol":        req.symbol,
             "exchange":      req.exchange,
             "generatedAt":   int(time.time() * 1000),
-            "modelVersion":  "v0.5.1-agi-ensemble",
+            "modelVersion":  "v0.5.1-jarvis-x-super-agi",
             "predictionMode": req.predictionMode,
             "adaptiveWeight": req.adaptiveWeight,
             "signals":       signals,
@@ -187,7 +224,11 @@ def predict(req: PredictionRequest):
         }
         if agi_status:
             result["agi"] = agi_status
+        if jarvis_x_result:
+            result["jarvis_x"] = jarvis_x_result
         return result
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Prediction error for {req.symbol}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
@@ -1344,4 +1385,125 @@ def jarvis_smart_theme_capabilities():
             '6. Extract dominant palette (requires Pillow)',
             '7. Build CSS theme from real image colors',
         ]
+    }
+
+
+# ── JARVIS-X Super-AGI Endpoints ──────────────────────────────────────────────
+
+@app.get("/jarvis-x/status")
+def jarvis_x_status():
+    """Full JARVIS-X Super-AGI status: LPM, Attack Maze, Perf Profiler, ASI Monitor."""
+    return JARVIS_X.get_full_status()
+
+
+@app.get("/jarvis-x/lpm")
+def jarvis_x_lpm():
+    """Loss Prevention Module status and circuit breaker state."""
+    return JARVIS_X.lpm.get_status()
+
+
+@app.post("/jarvis-x/lpm/compute")
+def jarvis_x_lpm_compute(body: dict):
+    """Compute portfolio safety threshold Ps for given horizon probs and drawdown."""
+    horizon_probs = body.get("horizon_probs", {})
+    drawdown_pct  = float(body.get("drawdown_pct", 0.0))
+    sentiment     = float(body.get("sentiment", 0.0))
+    ps = JARVIS_X.lpm.compute_ps(horizon_probs, drawdown_pct, sentiment)
+    return {"ps": ps, "circuit_broken": JARVIS_X.lpm._circuit_broken,
+            "threshold": 0.92, "scale": round(ps / 0.92, 3)}
+
+
+@app.get("/jarvis-x/asi")
+def jarvis_x_asi():
+    """ASI Consciousness Monitor — coherence, improvement proposals, emergent patterns."""
+    return JARVIS_X.asi_monitor.get_status()
+
+
+@app.get("/jarvis-x/asi/proposals")
+def jarvis_x_asi_proposals():
+    """Get all pending self-improvement proposals (require human approval)."""
+    return {"proposals": JARVIS_X.asi_monitor._improvement_proposals}
+
+
+@app.post("/jarvis-x/asi/proposals/{proposal_id}/approve")
+def jarvis_x_approve_proposal(proposal_id: str):
+    """Approve a self-improvement proposal."""
+    for p in JARVIS_X.asi_monitor._improvement_proposals:
+        if p["id"] == proposal_id:
+            p["status"] = "APPROVED"
+            p["approved_at"] = time.time()
+            return {"ok": True, "proposal": p}
+    raise HTTPException(status_code=404, detail="Proposal not found")
+
+
+@app.get("/jarvis-x/dio")
+def jarvis_x_dio():
+    """Dynamic Infrastructure Orchestrator status — budget, provider health."""
+    return DIO.get_status()
+
+
+@app.post("/jarvis-x/dio/select-provider")
+def jarvis_x_select_provider(body: dict):
+    """Select optimal compute provider for a task."""
+    task_type  = body.get("task_type", "daily_weekly")
+    volatility = float(body.get("volatility", 0.3))
+    provider   = DIO.select_provider(task_type, volatility)
+    return {"selected_provider": provider, "task_type": task_type}
+
+
+@app.get("/jarvis-x/data-hub")
+def jarvis_x_data_hub():
+    """Unified Data Hub status — fusion gate, sentiment cache, macro regime."""
+    return DATA_HUB.get_status()
+
+
+@app.post("/jarvis-x/data-hub/sentiment")
+async def jarvis_x_sentiment(body: dict):
+    """Update sentiment for a symbol from headlines."""
+    symbol    = body.get("symbol", "")
+    headlines = body.get("headlines", [])
+    if not symbol:
+        raise HTTPException(status_code=400, detail="symbol required")
+    score = DATA_HUB.sentiment.update_symbol_sentiment(symbol, headlines)
+    return {"symbol": symbol, "sentiment_score": round(score, 3),
+            "label": "bullish" if score > 0.1 else "bearish" if score < -0.1 else "neutral"}
+
+
+@app.get("/jarvis-x/capabilities")
+def jarvis_x_capabilities():
+    """Full JARVIS-X capability manifest."""
+    return {
+        "system":    "JARVIS-X Super-AGI / Proto-ASI",
+        "version":   "v1.0.0",
+        "blueprint": "Optimized, Secure & Future-Proof Super-AGI Market Architecture",
+        "modules": {
+            "I_predictor_engine": {
+                "unified_data_hub":      "Blends tickers, macro, NLP sentiment, alternative data",
+                "zero_trust_fusion_gate":"HSM/TPM-style data validation before AGI routing",
+                "multi_horizon_workflow":"Intraday/Daily/Strategic prediction matrix",
+                "loss_prevention_module":"LPM circuit breaker — Ps equation with γsentiment",
+            },
+            "II_super_agi_enclave": {
+                "conscious_core":        "Full system consciousness with coherence tracking",
+                "adaptive_perf_profiler":"Dynamic cloud-burst on volatility spikes",
+                "polymorphic_attack_maze":"Morphing infrastructure to exhaust attackers",
+                "agi_engine":            "8-model stacking ensemble with adaptive weights",
+                "agi_envelope":          "5-layer signal processing architecture",
+            },
+            "III_governance_panel": {
+                "dynamic_infra_orchestrator":"Cost/performance routing — Ollama → Cloud Flash → Premium",
+                "immutable_audit_trail":     "HMAC-chained tamper-evident log",
+                "credential_vault":          "Read-only REST scopes, no write/trade access",
+                "plain_english_dashboard":   "Democratized wealth generation explanations",
+                "asi_consciousness_monitor": "Proto-ASI coherence, self-improvement proposals",
+            },
+        },
+        "safety_interlocks": {
+            "read_only_isolation":       True,
+            "capital_preservation":      True,
+            "lpm_threshold":             0.92,
+            "privacy_mask":              True,
+            "no_trade_execution":        True,
+        },
+        "asi_level": round(JARVIS_X.asi_monitor._asi_level, 3),
     }
