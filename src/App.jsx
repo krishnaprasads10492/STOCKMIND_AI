@@ -11,6 +11,7 @@ const PredictionsPage = lazy(() => import('@pages/Predictions/PredictionsPage.js
 const HistoryPage     = lazy(() => import('@pages/History/HistoryPage.jsx'))
 const FavouritesPage  = lazy(() => import('@pages/Favourites/FavouritesPage.jsx'))
 const AdminPage       = lazy(() => import('@pages/Admin/AdminPage.jsx'))
+const ConfiguratorPage = lazy(() => import('@pages/Configurator/ConfiguratorPage.jsx'))
 const SettingsPage    = lazy(() => import('@pages/Settings/SettingsPage.jsx'))
 const BacktestPage    = lazy(() => import('@pages/Backtest/BacktestPage.jsx'))
 const StrategiesPage  = lazy(() => import('@pages/Strategies/StrategiesPage.jsx'))
@@ -80,6 +81,11 @@ export default function App() {
             <Route path="/admin" element={
               <ProtectedRoute adminOnly>
                 <Suspense fallback={<PageLoader />}><AdminPage /></Suspense>
+              </ProtectedRoute>
+            } />
+            <Route path="/configurator" element={
+              <ProtectedRoute adminOnly>
+                <Suspense fallback={<PageLoader />}><ConfiguratorPage /></Suspense>
               </ProtectedRoute>
             } />
           </Route>

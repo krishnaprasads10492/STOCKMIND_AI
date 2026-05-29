@@ -246,6 +246,24 @@ export function AppShell() {
               <span className={styles.navLabel}>Admin</span>
             </NavLink>
           )}
+          {user?.role === 'super-admin' && (
+            <>
+              <NavLink
+                to="/admin"
+                className={({ isActive }) => `${styles.navItem} ${isActive ? styles.navActive : ''}`}
+              >
+                <span className={styles.navIcon} aria-hidden="true">👤</span>
+                <span className={styles.navLabel}>Admin</span>
+              </NavLink>
+              <NavLink
+                to="/configurator"
+                className={({ isActive }) => `${styles.navItem} ${isActive ? styles.navActive : ''}`}
+              >
+                <span className={styles.navIcon} aria-hidden="true">🔌</span>
+                <span className={styles.navLabel}>Configurator</span>
+              </NavLink>
+            </>
+          )}
         </nav>
 
         <main className={styles.main} id="main-content">

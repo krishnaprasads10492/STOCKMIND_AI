@@ -31,6 +31,7 @@ import amiRoutes           from './routes/ami.js'
 import derivativesRoutes   from './routes/derivatives.js'
 import multibaggerRoutes   from './routes/multibagger.js'
 import imageAnalysisRoutes from './routes/imageAnalysis.js'
+import configuratorRoutes  from './routes/configurator.js'
 import { startOutcomeValidator, getValidatorStatus, addSSEClient, startCleanupScheduler } from './services/outcomeValidator.js'
 import { rebuildAMIIndex } from './services/amiStore.js'
 import { rebuildPredictionIndex } from './services/predictionStore.js'
@@ -205,6 +206,7 @@ app.use('/api/ami',            amiRoutes)
 app.use('/api/derivatives',    derivativesRoutes)
 app.use('/api/multibagger',    multibaggerRoutes)
 app.use('/api/image',          imageAnalysisRoutes)
+app.use('/api/configurator',   configuratorRoutes)
 
 // ── Audit log routes (admin only) ─────────────────────────────────────────────
 app.get('/api/audit/stats',  (req, res) => res.json(getAuditStats()))
