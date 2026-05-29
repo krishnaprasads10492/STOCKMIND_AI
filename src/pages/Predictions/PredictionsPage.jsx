@@ -12,6 +12,7 @@ import { RefreshCountdown } from '@components/RefreshCountdown.jsx'
 import { PredictionInputPanel } from './PredictionInputPanel.jsx'
 import { SignalGrid } from './SignalGrid.jsx'
 import { PredictionChart } from './PredictionChart.jsx'
+import TradingViewChart from '@components/TradingViewChart.jsx'
 import { generateSignals as jsGenerateSignals } from '@utils/predictionEngine.js'
 import { sanitizeTicker } from '@utils/sanitize.js'
 import { savePredictions } from '@services/backendClient.js'
@@ -211,7 +212,7 @@ export default function PredictionsPage() {
           <div className={styles.viewToggle}>
             <span className={styles.viewLabel}>View as:</span>
             <div className={styles.viewBtns} role="group" aria-label="View mode">
-              {[['cards','⊞ Cards'],['chart','📈 Chart']].map(([mode, label]) => (
+              {[['cards','⊞ Cards'],['chart','📈 Signal Chart'],['tv','📊 Live Chart']].map(([mode, label]) => (
                 <button
                   key={mode}
                   type="button"
@@ -234,6 +235,23 @@ export default function PredictionsPage() {
           {viewMode === 'chart' && (
             <ErrorBoundary>
               <PredictionChart signals={signals} params={lastParams} />
+            </ErrorBoundary>
+          )}
+
+          {viewMode === 'tv' && (
+            <ErrorBoundary>
+              <div style={{ height: '600px', borderRadius: 'var(--radius-xl)', overflow: 'hidden' }}>
+                <TradingViewChart
+                  symbol={lastParams?.symbol ?? activeSymbol}
+                  exchange={lastParams?.exchange ?? 'NSE'}
+                  interval="D"
+                  height="100%"
+                  showToolbar
+                  showSideToolbar
+                  allowSymbolChange
+                  studies={['RSI@tv-basicstudies', 'Volume@tv-basicstudies']}
+                />
+              </div>
             </ErrorBoundary>
           )}
 

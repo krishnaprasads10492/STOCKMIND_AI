@@ -20,6 +20,7 @@ const JarvisPage      = lazy(() => import('@pages/Jarvis/JarvisPage.jsx'))
 const AMIPage         = lazy(() => import('@pages/AMI/AMIPage.jsx'))
 const MultibaggerPage = lazy(() => import('@pages/Multibagger/MultibaggerPage.jsx'))
 const LearnPage       = lazy(() => import('@pages/Learn/LearnPage.jsx'))
+const ChartsPage      = lazy(() => import('@pages/Charts/ChartsPage.jsx'))
 
 function PageLoader() {
   return (
@@ -81,6 +82,9 @@ export default function App() {
             } />
             <Route path="/learn" element={
               <Suspense fallback={<PageLoader />}><LearnPage /></Suspense>
+            } />
+            <Route path="/charts" element={
+              <Suspense fallback={<PageLoader />}><ChartsPage /></Suspense>
             } />
             <Route path="/admin" element={
               <ProtectedRoute adminOnly>

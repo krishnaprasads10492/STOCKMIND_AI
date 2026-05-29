@@ -119,12 +119,15 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc:     ["'self'"],
-      scriptSrc:      ["'self'", "'unsafe-inline'"],  // Vite dev needs inline
+      scriptSrc:      ["'self'", "'unsafe-inline'",
+                       'https://s3.tradingview.com',
+                       'https://www.tradingview.com'],  // TradingView widget
       styleSrc:       ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
       imgSrc:         ["'self'", 'data:', 'blob:',
                        'https://images.unsplash.com',
                        'https://images.pexels.com',
-                       'https://pixabay.com'],
+                       'https://pixabay.com',
+                       'https://*.tradingview.com'],
       connectSrc:     ["'self'",
                        'http://localhost:*',
                        'ws://localhost:*', 'wss://localhost:*',
@@ -135,7 +138,10 @@ app.use(helmet({
                        'https://finnhub.io',
                        'https://api.unsplash.com',
                        'https://api.pexels.com',
-                       'https://pixabay.com'],
+                       'https://pixabay.com',
+                       'https://*.tradingview.com',
+                       'wss://*.tradingview.com'],
+      frameSrc:       ["'self'", 'https://*.tradingview.com'],
       fontSrc:        ["'self'", 'data:', 'https://fonts.gstatic.com'],
       objectSrc:      ["'none'"],
       frameAncestors: ["'none'"],

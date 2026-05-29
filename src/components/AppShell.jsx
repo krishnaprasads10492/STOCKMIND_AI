@@ -19,6 +19,7 @@ import styles from './AppShell.module.css'
 const NAV_ITEMS = [
   { to: '/dashboard',             label: 'Dashboard',          icon: '⊞' },
   { to: '/predictions',           label: 'Predictions',        icon: '🎯' },
+  { to: '/charts',                label: 'Charts',             icon: '📊' },
   { to: '/ami',                   label: 'AMI',                icon: '🧬' },
   { to: '/multibagger',           label: 'Multibagger',        icon: '🚀' },
   { to: '/strategy-intelligence', label: 'AI Intelligence',    icon: '🧠' },
@@ -26,7 +27,7 @@ const NAV_ITEMS = [
   { to: '/backtest',              label: 'Backtest',           icon: '📈' },
   { to: '/strategies',            label: 'Strategies',         icon: '🧩' },
   { to: '/favourites',            label: 'Favourites',         icon: '★' },
-  { to: '/history',               label: 'History',            icon: '📊' },
+  { to: '/history',               label: 'History',            icon: '📋' },
   { to: '/learn',                 label: 'Learn',              icon: '📚' },
   { to: '/settings',              label: 'Settings',           icon: '⚙' },
 ]
