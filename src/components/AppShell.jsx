@@ -27,6 +27,7 @@ const NAV_ITEMS = [
   { to: '/strategies',            label: 'Strategies',         icon: '🧩' },
   { to: '/favourites',            label: 'Favourites',         icon: '★' },
   { to: '/history',               label: 'History',            icon: '📊' },
+  { to: '/learn',                 label: 'Learn',              icon: '📚' },
   { to: '/settings',              label: 'Settings',           icon: '⚙' },
 ]
 

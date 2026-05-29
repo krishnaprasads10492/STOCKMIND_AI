@@ -106,6 +106,11 @@ class BacktestRequest(BaseModel):
     modelVersion: str   = Field(default="v0.2.0")
     ohlcv:        Optional[list[dict]] = None
     basePrice:    Optional[float] = None
+    # Date range / preset
+    preset:       Optional[str]  = None   # '1M'|'3M'|'6M'|'1Y'|'2Y'|'3Y'|'5Y'|'MAX'
+    fromDate:     Optional[str]  = None   # 'YYYY-MM-DD'
+    toDate:       Optional[str]  = None   # 'YYYY-MM-DD'
+    interval:     str            = "1d"   # '5m'|'15m'|'1h'|'1d'|'1w'
 
 
 class CalibrateRequest(BaseModel):
@@ -234,24 +239,27 @@ def predict(req: PredictionRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/backtest/presets")
+def backtest_presets():
+    """Return available date range presets for the backtest UI."""
+    from engine.backtest import TIMEFRAME_PRESETS, INTERVAL_BARS_PER_DAY
+    return {"presets": TIMEFRAME_PRESETS, "intervals": INTERVAL_BARS_PER_DAY}
+
+
 @app.post("/backtest")
 def backtest(req: BacktestRequest):
-    """
-    Run a walk-forward backtest for a symbol.
-    Returns accuracy metrics and stability flag.
-    If accuracy < 75% → action = 'retrain_required'
-    """
     try:
         params = req.model_dump()
         df, is_real = get_ohlcv(params)
-
         if not is_real:
             logger.warning(f"[Backtest] {req.symbol}: using mock OHLCV — results are indicative only")
-
-        result = run_backtest(df, req.symbol, req.modelVersion)
+        result = run_backtest(
+            df, req.symbol, req.modelVersion,
+            from_date=req.fromDate, to_date=req.toDate,
+            preset=req.preset, interval=req.interval,
+        )
         result["dataSource"] = "real" if is_real else "mock"
         result["warning"]    = None if is_real else "Mock OHLCV used — provide real data for accurate backtest"
-
         return result
     except Exception as e:
         logger.error(f"Backtest error for {req.symbol}: {e}", exc_info=True)
