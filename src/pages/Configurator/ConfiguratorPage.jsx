@@ -31,11 +31,13 @@ import styles from './ConfiguratorPage.module.css'
 
 async function fetchSchema(token) {
   const r = await apiFetch('/api/configurator/schema', { headers: { 'x-session-token': token } })
+  if (!r.ok) throw new Error(`Schema fetch failed: ${r.status}`)
   return r.json()
 }
 
 async function fetchIntegrations(token) {
   const r = await apiFetch('/api/configurator/integrations', { headers: { 'x-session-token': token } })
+  if (!r.ok) throw new Error(`Integrations fetch failed: ${r.status}`)
   return r.json()
 }
 
@@ -82,7 +84,8 @@ async function saveUserOverride(token, userId, category, providers, enabled) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function ConfiguratorPage() {
-  const { user, token } = useAuthStore()
+  const user  = useAuthStore(s => s.user)
+  const token = useAuthStore(s => s.token)
   const isSuperAdmin = user?.role === 'super-admin'
 
   const [schema,       setSchema]       = useState(null)
@@ -101,18 +104,18 @@ export default function ConfiguratorPage() {
         fetchIntegrations(token),
         fetchUsers(token).catch(() => ({ users: [] })),
       ])
-      setSchema(schemaData.schema ?? {})
+      const schemaObj = schemaData.schema ?? {}
+      setSchema(schemaObj)
       setIntegrations(intData.integrations ?? {})
       setUsers(Array.isArray(usersData) ? usersData : usersData.users ?? [])
-      if (!activeTab && schemaData.schema) {
-        setActiveTab(Object.keys(schemaData.schema)[0])
-      }
+      // Only set initial tab once
+      setActiveTab(prev => prev ?? Object.keys(schemaObj)[0] ?? null)
     } catch (e) {
       setError(e?.message ?? 'Failed to load configurator')
     } finally {
       setLoading(false)
     }
-  }, [token])
+  }, [token])  // activeTab intentionally excluded — we only set it once
 
   useEffect(() => { load() }, [load])
 
@@ -225,14 +228,16 @@ export default function ConfiguratorPage() {
 // ── Category Panel ────────────────────────────────────────────────────────────
 
 function CategoryPanel({ category, schema, config, token, userOverride, onSaved }) {
-  const [providers, setProviders] = useState(() => {
+  const initProviders = () => {
     const stored = config?.config?.providers ?? []
-    // Merge schema providers with stored config
+    const enabledList = config?.enabled ?? config?.config?.enabled ?? []
     return schema.providers.map(sp => {
       const found = stored.find(p => p.id === sp.id) ?? {}
-      return { ...sp, ...found, _enabled: (config?.enabled ?? []).includes(sp.id) }
+      return { ...sp, ...found, _enabled: enabledList.includes(sp.id) }
     })
-  })
+  }
+
+  const [providers, setProviders] = useState(initProviders)
   const [saving,  setSaving]  = useState(false)
   const [saved,   setSaved]   = useState(false)
   const [error,   setError]   = useState('')
