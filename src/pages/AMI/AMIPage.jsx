@@ -9,6 +9,7 @@ import { useAuthStore } from '@store/authStore.js'
 import { ErrorBoundary } from '@components/ErrorBoundary.jsx'
 import { Disclaimer } from '@components/Disclaimer.jsx'
 import { ImageAnalyser } from '@components/ImageAnalyser.jsx'
+import { GlobalSymbolPicker } from '@components/GlobalSymbolPicker.jsx'
 import { sanitizeTicker } from '@utils/sanitize.js'
 import { apiFetch } from '@services/apiClient.js'
 
@@ -40,14 +41,11 @@ export default function AMIPage() {
           <p className={styles.subtitle}>Multi-timeframe · Derivatives · Document Analysis · Trendlines</p>
         </div>
         <div className={styles.symbolRow}>
-          <input className={styles.symbolInput} value={symbol}
-            onChange={e => setSymbol(e.target.value.toUpperCase())}
-            placeholder="Symbol e.g. NIFTY50" maxLength={20} />
-          <select className={styles.select} value={exchange} onChange={e => setExchange(e.target.value)}>
-            <option value="NSE">NSE</option>
-            <option value="BSE">BSE</option>
-            <option value="CRYPTO">Crypto</option>
-          </select>
+          <GlobalSymbolPicker
+            value={symbol}
+            exchange={exchange}
+            onChange={(sym, meta) => { setSymbol(sym); if (meta?.exchange) setExchange(meta.exchange) }}
+          />
         </div>
       </div>
 

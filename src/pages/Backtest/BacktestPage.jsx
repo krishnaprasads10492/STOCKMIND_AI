@@ -15,11 +15,10 @@ import { useMarketStore, MARKET_MODULES } from '@store/marketStore.js'
 import { ErrorBoundary } from '@components/ErrorBoundary.jsx'
 import { Disclaimer } from '@components/Disclaimer.jsx'
 import { InfoTooltip } from '@components/InfoTooltip.jsx'
-import {
-  runBacktest, parseStrategy, saveStrategy,
+import { runBacktest, parseStrategy, saveStrategy,
   fetchStrategies, deleteStrategy,
 } from '@services/backtestClient.js'
-import { sanitizeTicker } from '@utils/sanitize.js'
+import { GlobalSymbolPicker } from '@components/GlobalSymbolPicker.jsx'
 import styles from './BacktestPage.module.css'
 
 const PAGE = 'backtest'
@@ -107,15 +106,10 @@ function BacktestPanel({ page }) {
 
   async function handleRun(e) {
     e.preventDefault()
-    const r = sanitizeTicker(symbol)
-    if (!r.ok) { setError('Invalid symbol'); return }
-
-    setLoading(true)
-    setError('')
-    setResult(null)
-
+    if (!symbol) { setError('Select a symbol'); return }
+    setLoading(true); setError(''); setResult(null)
     try {
-      const data = await runBacktest(r.value, exchange, token)
+      const data = await runBacktest(symbol, exchange, token)
       if (data.error) { setError(data.error); return }
       setResult(data)
     } catch (err) {
@@ -145,15 +139,12 @@ function BacktestPanel({ page }) {
           <div className={styles.field}>
             <label className={styles.label} htmlFor="bt-symbol">
               Symbol
-              <InfoTooltip page={page} title="Symbol" content="Enter the ticker symbol to backtest. Use NSE symbols for Indian instruments." example={{ text: 'NIFTY50, BANKNIFTY, RELIANCE, TCS' }} />
+              <InfoTooltip page={page} title="Symbol" content="Select the symbol to backtest." example={{ text: 'NIFTY50, BANKNIFTY, RELIANCE, TCS' }} />
             </label>
-            <input
-              id="bt-symbol"
-              className={styles.input}
+            <GlobalSymbolPicker
               value={symbol}
-              onChange={e => setSymbol(e.target.value.toUpperCase())}
-              placeholder="e.g. NIFTY50"
-              maxLength={20}
+              exchange={exchange}
+              onChange={(sym, meta) => { setSymbol(sym); if (meta?.exchange) setExchange(meta.exchange) }}
               disabled={loading}
             />
           </div>

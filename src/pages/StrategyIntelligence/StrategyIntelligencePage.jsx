@@ -19,6 +19,7 @@ import { ErrorBoundary } from '@components/ErrorBoundary.jsx'
 import { Disclaimer } from '@components/Disclaimer.jsx'
 import { InfoTooltip } from '@components/InfoTooltip.jsx'
 import { sanitizeTicker } from '@utils/sanitize.js'
+import { GlobalSymbolPicker } from '@components/GlobalSymbolPicker.jsx'
 import {
   scoreSymbol, scoreSymbolBatch, fetchScoreHistory,
   exportScoresCSV, fetchOptimizerHealth, runOptimizationCycle, approveOptimization,
@@ -156,12 +157,10 @@ function SingleSymbolTab({ token, page }) {
 
   async function handleScore(e) {
     e.preventDefault()
-    const r = sanitizeTicker(symbol)
-    if (!r.ok) { setError('Invalid symbol'); return }
-
+    if (!symbol) { setError('Select a symbol'); return }
     setLoading(true); setError(''); setResult(null)
     try {
-      const data = await scoreSymbol(r.value, exchange, regime, token)
+      const data = await scoreSymbol(symbol, exchange, regime, token)
       if (data.error) { setError(data.error); return }
       setResult(data)
     } catch (err) {
@@ -183,26 +182,14 @@ function SingleSymbolTab({ token, page }) {
           <div className={styles.field}>
             <label className={styles.label} htmlFor="si-symbol">
               Symbol
-              <InfoTooltip page={page} title="Symbol" content="Enter any NSE/BSE equity, index, crypto, forex, or commodity symbol." example={{ text: 'NIFTY50, RELIANCE, BTCUSDT, GOLD, EURUSD' }} />
+              <InfoTooltip page={page} title="Symbol" content="Select any NSE/BSE equity, index, crypto, forex, or commodity symbol." example={{ text: 'NIFTY50, RELIANCE, BTCUSDT, GOLD, EURUSD' }} />
             </label>
-            <input id="si-symbol" className={styles.input} value={symbol}
-              onChange={e => setSymbol(e.target.value.toUpperCase())}
-              placeholder="e.g. NIFTY50" maxLength={20} disabled={loading} />
-          </div>
-
-          <div className={styles.field}>
-            <label className={styles.label} htmlFor="si-exchange">Exchange</label>
-            <select id="si-exchange" className={styles.select} value={exchange}
-              onChange={e => setExchange(e.target.value)} disabled={loading}>
-              <option value="NSE">NSE</option>
-              <option value="BSE">BSE</option>
-              <option value="CRYPTO">Crypto</option>
-              <option value="FOREX">Forex</option>
-              <option value="COMEX">COMEX</option>
-              <option value="NYMEX">NYMEX</option>
-              <option value="NYSE">NYSE</option>
-              <option value="NASDAQ">NASDAQ</option>
-            </select>
+            <GlobalSymbolPicker
+              value={symbol}
+              exchange={exchange}
+              onChange={(sym, meta) => { setSymbol(sym); if (meta?.exchange) setExchange(meta.exchange) }}
+              disabled={loading}
+            />
           </div>
 
           <div className={styles.field}>

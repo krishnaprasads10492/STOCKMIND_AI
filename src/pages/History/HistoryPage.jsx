@@ -1,20 +1,18 @@
 import { useState, useEffect } from 'react'
 import { fetchPredictionHistory, fetchAccuracy } from '@services/backendClient.js'
-import { sanitizeTicker } from '@utils/sanitize.js'
 import { ErrorBoundary } from '@components/ErrorBoundary.jsx'
+import { GlobalSymbolPicker } from '@components/GlobalSymbolPicker.jsx'
 import styles from './HistoryPage.module.css'
 
 export default function HistoryPage() {
-  const [symbol, setSymbol]     = useState('NIFTY50')
-  const [input, setInput]       = useState('NIFTY50')
-  const [history, setHistory]   = useState([])
+  const [symbol,  setSymbol]  = useState('NIFTY50')
+  const [history, setHistory] = useState([])
   const [accuracy, setAccuracy] = useState(null)
-  const [loading, setLoading]   = useState(false)
-  const [error, setError]       = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error,   setError]   = useState('')
 
   async function load(sym) {
-    setLoading(true)
-    setError('')
+    setLoading(true); setError('')
     try {
       const [hist, acc] = await Promise.all([
         fetchPredictionHistory(sym, 100),
@@ -31,28 +29,17 @@ export default function HistoryPage() {
 
   useEffect(() => { load(symbol) }, [symbol])
 
-  function handleSearch(e) {
-    e.preventDefault()
-    const r = sanitizeTicker(input)
-    if (!r.ok) { setError('Invalid ticker'); return }
-    setSymbol(r.value)
-  }
-
   return (
     <div className={styles.page}>
       <div className={styles.header}>
         <h1 className={styles.title}>Prediction History</h1>
-        <form className={styles.searchForm} onSubmit={handleSearch}>
-          <input
-            className={styles.searchInput}
-            value={input}
-            onChange={e => setInput(e.target.value.toUpperCase())}
-            placeholder="Symbol e.g. NIFTY50"
-            maxLength={20}
-            aria-label="Symbol search"
+        <div className={styles.searchForm}>
+          <GlobalSymbolPicker
+            value={symbol}
+            onChange={(sym) => setSymbol(sym)}
+            size="sm"
           />
-          <button className={styles.searchBtn} type="submit">Search</button>
-        </form>
+        </div>
       </div>
 
       {error && <div className={styles.error} role="alert">{error}</div>}
