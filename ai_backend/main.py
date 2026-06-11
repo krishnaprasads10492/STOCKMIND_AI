@@ -46,6 +46,8 @@ from engine.perception_engine import get_perception_engine
 from engine.inference_scale_quantizer import get_isq
 from engine.multi_horizon_wave import get_wave_engine
 from engine.friday_nexus import get_friday_nexus, PHI_MIN, GAMMA_DISCOUNT
+from engine.doc_intelligence import get_doc_engine
+from engine.multi_level_predictor import get_multi_level_predictor, level_to_dict
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("stockmind-ai")
@@ -1865,4 +1867,205 @@ def friday_nexus_math():
         "debate_system":   "ToT-MAC — Tree-of-Thought Multi-Agent Consensus",
         "search_system":   "Alpha Space MCTS — Monte Carlo Tree Search",
         "defense_system":  "GAM-WAR — Generative Adversarial Market Warfare",
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Document Intelligence + Multi-Level Prediction Endpoints
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.get("/doc-intel/status")
+def doc_intel_status():
+    """Document Intelligence Engine + Knowledge Base status."""
+    return {"ok": True, **get_doc_engine().get_status()}
+
+
+@app.post("/doc-intel/ingest-text")
+def doc_intel_ingest_text(body: dict):
+    """
+    Ingest plain text into the Knowledge Base.
+    Body: { text, source_name?, symbol?, doc_type? }
+    """
+    text        = str(body.get("text", "")).strip()
+    source_name = str(body.get("source_name", "api-text"))
+    symbol      = body.get("symbol")
+    doc_type    = body.get("doc_type")
+    if not text:
+        return {"ok": False, "error": "text required"}
+    entry = get_doc_engine().ingest_text(text, source_name, symbol, doc_type)
+    return {
+        "ok":       True,
+        "entry_id": entry.id,
+        "doc_type": entry.doc_type,
+        "symbols":  entry.symbols,
+        "sentiment":entry.sentiment,
+        "summary":  entry.summary,
+        "hints":    entry.strategy_hints,
+        "metrics":  entry.key_metrics,
+    }
+
+
+@app.get("/doc-intel/knowledge/{symbol}")
+def doc_intel_symbol_knowledge(symbol: str):
+    """Get all knowledge entries for a symbol."""
+    engine  = get_doc_engine()
+    entries = engine.kb.get_for_symbol(symbol.upper())
+    context = engine.get_prediction_boost(symbol.upper())
+    return {
+        "ok":      True,
+        "symbol":  symbol.upper(),
+        "count":   len(entries),
+        "context": context,
+        "entries": [
+            {"id": e.id, "source": e.source_name, "type": e.doc_type,
+             "summary": e.summary, "sentiment": e.sentiment,
+             "metrics": e.key_metrics, "hints": e.strategy_hints,
+             "ts": e.ts}
+            for e in entries
+        ],
+    }
+
+
+@app.get("/doc-intel/macro-context")
+def doc_intel_macro():
+    """Get current macro context from ingested documents."""
+    return {"ok": True, **get_doc_engine().kb.get_macro_context()}
+
+
+@app.post("/doc-intel/search")
+def doc_intel_search(body: dict):
+    """Search the knowledge base."""
+    query = str(body.get("query", "")).strip()
+    if not query:
+        return {"ok": False, "error": "query required"}
+    entries = get_doc_engine().kb.search(query)
+    return {
+        "ok":     True,
+        "query":  query,
+        "count":  len(entries),
+        "results": [
+            {"id": e.id, "source": e.source_name, "type": e.doc_type,
+             "symbols": e.symbols, "summary": e.summary, "sentiment": e.sentiment,
+             "hints": e.strategy_hints}
+            for e in entries
+        ],
+    }
+
+
+@app.post("/multi-level/predict")
+async def multi_level_predict(body: dict):
+    """
+    Generate predictions at all 8 levels for a symbol.
+    Body: { symbol, exchange?, levels? }
+    levels: list of ints 1-8 (default all)
+    """
+    symbol   = str(body.get("symbol", "NIFTY50")).upper()
+    exchange = str(body.get("exchange", "NSE")).upper()
+    levels   = body.get("levels")  # None = all 8
+
+    # Fetch OHLCV from Node.js market API
+    ohlcv = []
+    base_price = 25000.0
+    try:
+        import urllib.request as _url, json as _json
+        with _url.urlopen(f"http://localhost:4098/api/market/ohlcv/{symbol}", timeout=10) as resp:
+            data = _json.loads(resp.read())
+            ohlcv = data.get("data", [])
+            if ohlcv:
+                base_price = float(ohlcv[-1].get("close", 25000))
+    except Exception as e:
+        logger.warning("[MultiLevel] OHLCV fetch failed: %s", e)
+
+    # Fetch latest quote for base price
+    try:
+        import urllib.request as _url2, json as _json2
+        with _url2.urlopen(f"http://localhost:4098/api/market/quote/{symbol}?exchange={exchange}", timeout=5) as resp2:
+            q = _json2.loads(resp2.read())
+            base_price = float(q.get("close", q.get("price", base_price)))
+    except Exception:
+        pass
+
+    # Get doc intelligence context
+    doc_engine = get_doc_engine()
+    kb_context = doc_engine.get_prediction_boost(symbol)
+    macro_bias = doc_engine.get_macro_bias()
+
+    # Get base probability from a quick signal estimate
+    # (use middle ground 0.55 if no predict call)
+    base_prob = float(body.get("base_prob", 0.55))
+
+    multi = get_multi_level_predictor()
+    predictions = multi.predict_all_levels(
+        base_prob     = base_prob,
+        current_price = base_price,
+        ohlcv         = ohlcv,
+        regime        = body.get("regime", "ranging"),
+        doc_context   = kb_context if kb_context.get("entries_found", 0) > 0 else None,
+        macro_bias    = macro_bias,
+        levels        = levels,
+    )
+
+    return {
+        "ok":           True,
+        "symbol":       symbol,
+        "base_price":   base_price,
+        "base_prob":    base_prob,
+        "macro_bias":   macro_bias,
+        "kb_entries":   kb_context.get("entries_found", 0),
+        "predictions":  [level_to_dict(p) for p in predictions],
+        "level_summary": {
+            p.name: {
+                "direction": p.direction,
+                "probability": round(p.probability * 100, 1),
+                "target": p.price_target,
+                "suitable": p.suitable_for,
+            }
+            for p in predictions
+        },
+    }
+
+
+@app.post("/doc-intel/ingest-buffer")
+def doc_intel_ingest_buffer(body: dict):
+    """
+    Ingest a file from base64 buffer.
+    Body: { file_b64, filename, mimetype, symbol?, doc_type? }
+    Called by Express when user uploads a file.
+    """
+    import base64
+    file_b64  = body.get("file_b64", "")
+    filename  = str(body.get("filename", "upload"))
+    mimetype  = str(body.get("mimetype", "application/octet-stream"))
+    symbol    = body.get("symbol")
+    doc_type  = body.get("doc_type")
+
+    if not file_b64:
+        return {"ok": False, "error": "file_b64 required"}
+
+    try:
+        # Strip data URL prefix if present
+        if "," in file_b64:
+            file_b64 = file_b64.split(",", 1)[1]
+        buffer = base64.b64decode(file_b64)
+    except Exception as e:
+        return {"ok": False, "error": f"base64 decode failed: {e}"}
+
+    engine = get_doc_engine()
+    entry  = engine.ingest_buffer(buffer, filename, mimetype, symbol)
+
+    # Override doc_type if provided
+    if doc_type:
+        entry.doc_type = doc_type
+
+    return {
+        "ok":       True,
+        "entry_id": entry.id,
+        "doc_type": entry.doc_type,
+        "symbols":  entry.symbols,
+        "sentiment":entry.sentiment,
+        "summary":  entry.summary,
+        "hints":    entry.strategy_hints,
+        "metrics":  entry.key_metrics,
+        "confidence": entry.confidence,
+        "text_preview": entry.raw_text[:300],
     }

@@ -185,8 +185,6 @@ router.get('/summary/:symbol', requireAuth, (req, res) => {
 })
 
 export default router
-
-// ── POST /api/ami/upload-statement ───────────────────────────────────────────
 // Accepts multipart form data with a PDF or Excel file.
 // Extracts text, generates scenarios, stores them, discards the file.
 

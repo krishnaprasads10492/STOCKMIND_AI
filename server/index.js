@@ -33,6 +33,7 @@ import multibaggerRoutes   from './routes/multibagger.js'
 import imageAnalysisRoutes from './routes/imageAnalysis.js'
 import configuratorRoutes  from './routes/configurator.js'
 import strategyAIRoutes    from './routes/strategyAI.js'
+import docIntelRoutes      from './routes/docIntel.js'
 import { startOutcomeValidator, getValidatorStatus, addSSEClient, startCleanupScheduler } from './services/outcomeValidator.js'
 import { rebuildAMIIndex } from './services/amiStore.js'
 import { rebuildPredictionIndex } from './services/predictionStore.js'
@@ -168,7 +169,9 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'x-session-token'],
 }))
 
-app.use(express.json({ limit: '512kb' }))  // tighter body limit
+app.use(express.json({ limit: '512kb' }))  // tighter body limit for JSON
+// Larger limit for base64-encoded file uploads via JSON
+app.use('/api/doc-intel/ingest-text', express.json({ limit: '256kb' }))
 
 // Remove x-powered-by (already done by helmet, but explicit)
 app.disable('x-powered-by')
@@ -218,6 +221,8 @@ app.use('/api/multibagger',    multibaggerRoutes)
 app.use('/api/image',          imageAnalysisRoutes)
 app.use('/api/configurator',   configuratorRoutes)
 app.use('/api/strategy-ai',   strategyAIRoutes)
+app.use('/api/doc-intel',     docIntelRoutes)
+app.use('/api/multi-level',   docIntelRoutes)
 
 // ── Audit log routes (admin only) ─────────────────────────────────────────────
 app.get('/api/audit/stats',  (req, res) => res.json(getAuditStats()))
