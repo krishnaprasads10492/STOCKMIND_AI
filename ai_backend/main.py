@@ -2069,3 +2069,162 @@ def doc_intel_ingest_buffer(body: dict):
         "confidence": entry.confidence,
         "text_preview": entry.raw_text[:300],
     }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Image → Theme Creator (upload a single reference image)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ImageThemeRequest(BaseModel):
+    image_b64:       str   # base64-encoded image (with or without data URL prefix)
+    name:            str   = Field(..., min_length=1, max_length=60)
+    description:     str   = Field(default="", max_length=300)
+    use_as_wallpaper: bool = Field(default=True)   # use the image itself as wallpaper
+    n_colors:        int   = Field(default=10, ge=4, le=20)
+
+
+@app.post("/jarvis/theme-from-image")
+async def jarvis_theme_from_image(req: ImageThemeRequest):
+    """
+    Create a complete UI theme from a single reference image.
+
+    Pipeline:
+      1. Decode base64 image → PIL Image
+      2. Extract dominant color palette (median-cut quantization)
+      3. Analyse image for style hints via cloud vision (if available)
+      4. Build complete CSS theme vars from palette
+      5. Use image as wallpaper (if requested)
+      6. Return theme object ready to preview / write to themes.js
+
+    The image can contain anything:
+      - Color swatches / mood boards
+      - Screenshots / designs
+      - Photos / artwork
+      - Chart screenshots
+    All colors, patterns and mood are extracted automatically.
+    """
+    import base64
+    import io
+
+    # 1. Decode image
+    raw_b64 = req.image_b64
+    if ',' in raw_b64:
+        header, raw_b64 = raw_b64.split(',', 1)
+        # Detect MIME type from header
+        mime = 'image/png'
+        if 'jpeg' in header or 'jpg' in header:
+            mime = 'image/jpeg'
+        elif 'gif' in header:
+            mime = 'image/gif'
+        elif 'webp' in header:
+            mime = 'image/webp'
+    else:
+        mime = 'image/png'
+
+    try:
+        img_bytes = base64.b64decode(raw_b64)
+        from PIL import Image as PILImage
+        img = PILImage.open(io.BytesIO(img_bytes)).convert('RGB')
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=f"Could not decode image: {e}")
+
+    # 2. Extract dominant palette
+    from engine.smart_theme_creator import (
+        extract_palette_from_image, build_theme_from_palette, score_palette
+    )
+    palette = extract_palette_from_image(img, n_colors=req.n_colors)
+
+    if not palette:
+        raise HTTPException(status_code=422, detail="Could not extract colors from image")
+
+    logger.info("[ThemeFromImage] '%s' — extracted %d colors, score=%.1f",
+                req.name, len(palette), score_palette(palette))
+
+    # 3. Vision analysis for style hints (best-effort)
+    style_hints = []
+    description = req.description
+    try:
+        # Use existing image analyser for style context
+        from engine.image_reader import analyse_image_sync
+        analysis = analyse_image_sync(req.image_b64, context=f"Color theme for: {req.name}")
+        if analysis:
+            local = analysis.get('local', {})
+            merged = analysis.get('merged', {})
+            # Extract style from analysis
+            bias = (merged or local).get('bias', 'neutral')
+            patterns = (merged or local).get('patterns', [])
+            summary = (merged or local).get('summary', '')
+
+            if not description and summary:
+                description = summary[:200]
+
+            if bias == 'bullish':
+                style_hints.append('bullish_green')
+            elif bias == 'bearish':
+                style_hints.append('bearish_red')
+
+            for p in patterns:
+                p_l = p.lower()
+                if any(w in p_l for w in ['dark', 'black', 'shadow']):
+                    style_hints.append('dark_bg')
+                if any(w in p_l for w in ['neon', 'glow', 'bright']):
+                    style_hints.append('neon_glow')
+                if any(w in p_l for w in ['minimal', 'clean', 'simple']):
+                    style_hints.append('minimal')
+                if any(w in p_l for w in ['cyber', 'tech', 'digital']):
+                    style_hints.append('cyberpunk')
+    except Exception:
+        pass  # non-fatal
+
+    if not description:
+        description = f"Custom theme generated from image — {req.name}"
+
+    # 4. Build wallpaper data URI if requested
+    wallpaper_url = ''
+    wallpaper_credit = ''
+    if req.use_as_wallpaper:
+        # Resize image to reasonable wallpaper size (max 1920px wide)
+        max_w = 1920
+        w, h = img.size
+        if w > max_w:
+            new_h = int(h * max_w / w)
+            img_resized = img.resize((max_w, new_h), PILImage.LANCZOS)
+        else:
+            img_resized = img
+
+        # Convert to JPEG data URI (compressed for performance)
+        buf = io.BytesIO()
+        img_resized.save(buf, format='JPEG', quality=85, optimize=True)
+        wallpaper_b64 = base64.b64encode(buf.getvalue()).decode('ascii')
+        wallpaper_url = f'data:image/jpeg;base64,{wallpaper_b64}'
+        wallpaper_credit = f'Custom image — {req.name}'
+
+    # 5. Build theme
+    theme = build_theme_from_palette(
+        name             = req.name,
+        description      = description,
+        palette          = palette,
+        wallpaper_url    = wallpaper_url,
+        wallpaper_credit = wallpaper_credit,
+    )
+
+    # 6. Enrich with style hints
+    theme['style_hints']  = style_hints
+    theme['source']       = 'image_upload'
+    theme['palette_hex']  = [f'#{r:02x}{g:02x}{b:02x}' for r, g, b in palette]
+    theme['score']        = round(score_palette(palette), 1)
+    theme['image_size']   = list(img.size)
+
+    # 7. Wallpaper entry for UI
+    if wallpaper_url:
+        theme['wallpapers'] = [{
+            'url':         wallpaper_url,
+            'credit':      wallpaper_credit,
+            'thumbnail':   wallpaper_url,
+            'source':      'uploaded_image',
+        }]
+
+    logger.info("[ThemeFromImage] Built theme '%s' key='%s' colors=%d wallpaper=%s",
+                req.name, theme['key'], len(palette), bool(wallpaper_url))
+
+    return {'ok': True, 'theme': theme}

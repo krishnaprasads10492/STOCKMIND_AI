@@ -172,6 +172,8 @@ app.use(cors({
 app.use(express.json({ limit: '512kb' }))  // tighter body limit for JSON
 // Larger limit for base64-encoded file uploads via JSON
 app.use('/api/doc-intel/ingest-text', express.json({ limit: '256kb' }))
+// Theme from image: needs ~3MB for base64-encoded wallpaper
+app.use('/api/jarvis/theme-from-image', express.json({ limit: '8mb' }))
 
 // Remove x-powered-by (already done by helmet, but explicit)
 app.disable('x-powered-by')

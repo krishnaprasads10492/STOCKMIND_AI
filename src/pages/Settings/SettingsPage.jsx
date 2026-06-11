@@ -6,6 +6,7 @@ import { updatePreferencesApi } from '@services/backendClient.js'
 import { apiFetch } from '@services/apiClient.js'
 import { activateGhostMode, wipeServerData } from '@utils/ghostMode.js'
 import { THEMES, THEME_KEYS } from '@utils/themes.js'
+import { ImageThemeCreator } from '@components/ImageThemeCreator.jsx'
 import styles from './SettingsPage.module.css'
 
 export default function SettingsPage() {
@@ -18,6 +19,7 @@ export default function SettingsPage() {
     pageTooltips, setPageTooltips,
   } = useUiPrefsStore()
   const { activeTheme, setTheme, nightLight, setNightLight } = useThemeStore()
+  const [showImageTheme, setShowImageTheme] = useState(false)
 
   const [capital,  setCapital]  = useState(prefs.defaultCapital ?? 100000)
   const [risk,     setRisk]     = useState(prefs.riskPerTrade ?? 1.5)
@@ -149,7 +151,26 @@ export default function SettingsPage() {
         {/* ── Appearance ── */}
         <section className={styles.section}>
           <h2 className={styles.sectionTitle}>Appearance</h2>
-          <p className={styles.hint}>Choose a sci-fi theme. Changes apply instantly.</p>
+          <div className={styles.appearanceHeader}>
+            <p className={styles.hint}>Choose a theme. Changes apply instantly.</p>
+            <button
+              className={styles.imageThemeBtn}
+              onClick={() => setShowImageTheme(true)}
+              type="button"
+            >
+              🖼 Create Theme from Image
+            </button>
+          </div>
+
+          {showImageTheme && (
+            <ImageThemeCreator
+              onClose={() => setShowImageTheme(false)}
+              onThemeCreated={(theme) => {
+                setShowImageTheme(false)
+                // Note: theme is written to themes.js — reload needed to use it
+              }}
+            />
+          )}
 
           <div className={styles.themeGrid}>
             {THEME_KEYS.map(key => {

@@ -368,6 +368,36 @@ router.post('/write-theme', requireAuth, async (req, res) => {
   }
 })
 
+// POST /api/jarvis/theme-from-image — create theme from uploaded image
+// Accepts: JSON { image_b64, name, description?, use_as_wallpaper?, n_colors? }
+// OR multipart with 'image' file field + other fields
+router.post('/theme-from-image', requireAuth, async (req, res) => {
+  try {
+    let image_b64 = req.body?.image_b64
+    const name            = String(req.body?.name ?? '').trim()
+    const description     = String(req.body?.description ?? '').trim()
+    const use_as_wallpaper = req.body?.use_as_wallpaper !== false
+    const n_colors        = Math.min(20, Math.max(4, Number(req.body?.n_colors ?? 10)))
+
+    if (!name) return res.status(400).json({ error: 'name required' })
+    if (!image_b64) return res.status(400).json({ error: 'image_b64 required' })
+
+    // Validate it looks like an image
+    if (!image_b64.startsWith('data:image') && !image_b64.match(/^[A-Za-z0-9+/].*={0,2}$/)) {
+      return res.status(400).json({ error: 'image_b64 must be a base64 image or data URL' })
+    }
+
+    const data = await aiPost('/jarvis/theme-from-image', {
+      image_b64, name, description, use_as_wallpaper, n_colors,
+    }, 60_000)
+
+    res.json(data)
+  } catch (err) {
+    if (err.name === 'AbortError') return res.status(504).json({ error: 'Theme generation timed out' })
+    res.status(503).json({ error: 'AI backend unavailable' })
+  }
+})
+
 // ── JARVIS Brain (Conversational AI) routes ───────────────────────────────────
 
 // POST /api/jarvis/brain/chat — main conversational endpoint
