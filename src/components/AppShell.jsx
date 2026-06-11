@@ -77,7 +77,17 @@ export function AppShell() {
 
   async function handleLogout() {
     await logoutApi()
+    // Clear all caches: localStorage auth, sessionStorage, service worker cache
     clearSession()
+    try {
+      // Clear any service worker caches (PWA)
+      if ('caches' in window) {
+        const keys = await caches.keys()
+        await Promise.all(keys.map(k => caches.delete(k)))
+      }
+      // Clear sessionStorage (any page-level state)
+      sessionStorage.clear()
+    } catch { /* non-fatal */ }
     navigate('/login', { replace: true })
   }
 

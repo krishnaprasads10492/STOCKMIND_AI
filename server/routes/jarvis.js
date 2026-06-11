@@ -644,4 +644,119 @@ router.post('/providers/generate-config', requireAuth, async (req, res) => {
   }
 })
 
+// ─────────────────────────────────────────────────────────────────────────────
+// JARVIS-X Super-AGI routes (proxy to /jarvis-x/* on Python)
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get('/jarvis-x/status',        requireAuth, async (req, res) => { try { res.json(await aiGet('/jarvis-x/status'))        } catch { res.status(503).json({ error: 'AI backend unavailable' }) } })
+router.get('/jarvis-x/lpm',           requireAuth, async (req, res) => { try { res.json(await aiGet('/jarvis-x/lpm'))            } catch { res.status(503).json({ error: 'AI backend unavailable' }) } })
+router.get('/jarvis-x/asi',           requireAuth, async (req, res) => { try { res.json(await aiGet('/jarvis-x/asi'))            } catch { res.status(503).json({ error: 'AI backend unavailable' }) } })
+router.get('/jarvis-x/asi/proposals', requireAuth, async (req, res) => { try { res.json(await aiGet('/jarvis-x/asi/proposals'))  } catch { res.status(503).json({ error: 'AI backend unavailable' }) } })
+router.get('/jarvis-x/dio',           requireAuth, async (req, res) => { try { res.json(await aiGet('/jarvis-x/dio'))            } catch { res.status(503).json({ error: 'AI backend unavailable' }) } })
+router.get('/jarvis-x/data-hub',      requireAuth, async (req, res) => { try { res.json(await aiGet('/jarvis-x/data-hub'))       } catch { res.status(503).json({ error: 'AI backend unavailable' }) } })
+router.get('/jarvis-x/capabilities',  requireAuth, async (req, res) => { try { res.json(await aiGet('/jarvis-x/capabilities'))   } catch { res.status(503).json({ error: 'AI backend unavailable' }) } })
+router.post('/jarvis-x/lpm/compute',  requireAuth, async (req, res) => { try { res.json(await aiPost('/jarvis-x/lpm/compute', req.body))  } catch { res.status(503).json({ error: 'AI backend unavailable' }) } })
+router.post('/jarvis-x/dio/select-provider', requireAuth, async (req, res) => { try { res.json(await aiPost('/jarvis-x/dio/select-provider', req.body)) } catch { res.status(503).json({ error: 'AI backend unavailable' }) } })
+router.post('/jarvis-x/data-hub/sentiment',  requireAuth, async (req, res) => { try { res.json(await aiPost('/jarvis-x/data-hub/sentiment', req.body))  } catch { res.status(503).json({ error: 'AI backend unavailable' }) } })
+router.post('/jarvis-x/asi/proposals/:id/approve', requireAuth, async (req, res) => { try { res.json(await aiPost(`/jarvis-x/asi/proposals/${req.params.id}/approve`, {})) } catch { res.status(503).json({ error: 'AI backend unavailable' }) } })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Blueprint AGI Routes — Perception Engine, ISQ, Multi-Horizon Wave, HUD
+// ─────────────────────────────────────────────────────────────────────────────
+
+// GET /api/jarvis/blueprint-status — Full AGI Architecture status (all 3 layers)
+router.get('/blueprint-status', requireAuth, async (req, res) => {
+  try {
+    const data = await aiGet('/agi/blueprint-status', 15_000)
+    res.json(data)
+  } catch { res.status(503).json({ error: 'AI backend unavailable' }) }
+})
+
+// POST /api/jarvis/multi-horizon — Multi-Horizon Wave projections
+router.post('/multi-horizon', requireAuth, async (req, res) => {
+  const { symbol, exchange, regime, macro_bias, sentiment } = req.body
+  if (!symbol) return res.status(400).json({ error: 'symbol required' })
+  try {
+    const data = await aiPost('/jarvis/multi-horizon', {
+      symbol: String(symbol).toUpperCase(),
+      exchange: String(exchange ?? 'NSE').toUpperCase(),
+      regime:     regime     ?? 'trending_bull',
+      macro_bias: macro_bias ?? 0.0,
+      sentiment:  sentiment  ?? 0.0,
+    }, 30_000)
+    res.json(data)
+  } catch (err) {
+    if (err.name === 'AbortError') return res.status(504).json({ error: 'Wave projection timeout' })
+    res.status(503).json({ error: 'AI backend unavailable' })
+  }
+})
+
+// GET /api/jarvis/multi-horizon/status
+router.get('/multi-horizon/status', requireAuth, async (req, res) => {
+  try {
+    const data = await aiGet('/jarvis/multi-horizon/status')
+    res.json(data)
+  } catch { res.status(503).json({ error: 'AI backend unavailable' }) }
+})
+
+// GET /api/agi/isq-status — ISQ + ARC Gauge + Circuit Breaker status
+router.get('/isq-status', requireAuth, async (req, res) => {
+  try {
+    const data = await aiGet('/agi/isq-status')
+    res.json(data)
+  } catch { res.status(503).json({ error: 'AI backend unavailable' }) }
+})
+
+// POST /api/jarvis/isq-quantize — Run full ISQ pass
+router.post('/isq-quantize', requireAuth, async (req, res) => {
+  try {
+    const data = await aiPost('/agi/isq-quantize', req.body)
+    res.json(data)
+  } catch { res.status(503).json({ error: 'AI backend unavailable' }) }
+})
+
+// GET /api/jarvis/arc-gauge — ARC Compute Energy Gauge
+router.get('/arc-gauge', requireAuth, async (req, res) => {
+  try {
+    const data = await aiGet('/agi/arc-gauge')
+    res.json(data)
+  } catch { res.status(503).json({ error: 'AI backend unavailable' }) }
+})
+
+// POST /api/jarvis/arc-circuit-reset — Reset ARC circuit breaker
+router.post('/arc-circuit-reset', requireAuth, async (req, res) => {
+  try {
+    const data = await aiPost('/agi/arc-circuit-reset', {})
+    res.json(data)
+  } catch { res.status(503).json({ error: 'AI backend unavailable' }) }
+})
+
+// GET /api/jarvis/circuit-breaker — API Circuit Breaker / Read-Only Lock
+router.get('/circuit-breaker', requireAuth, async (req, res) => {
+  try {
+    const data = await aiGet('/agi/circuit-breaker')
+    res.json(data)
+  } catch { res.status(503).json({ error: 'AI backend unavailable' }) }
+})
+
+// GET /api/jarvis/perception-status — Perception Engine status
+router.get('/perception-status', requireAuth, async (req, res) => {
+  try {
+    const data = await aiGet('/agi/perception-status')
+    res.json(data)
+  } catch { res.status(503).json({ error: 'AI backend unavailable' }) }
+})
+
 export default router
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Friday Nexus Protocol Engine — Schema V5.00 Routes
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get('/friday-nexus/status',          requireAuth, async (req, res) => { try { res.json(await aiGet('/friday-nexus/status')) } catch { res.status(503).json({ error: 'AI backend unavailable' }) } })
+router.get('/friday-nexus/math-constants',  requireAuth, async (req, res) => { try { res.json(await aiGet('/friday-nexus/math-constants')) } catch { res.status(503).json({ error: 'AI backend unavailable' }) } })
+router.post('/friday-nexus/optimize',       requireAuth, async (req, res) => { try { res.json(await aiPost('/friday-nexus/optimize', req.body, 30_000)) } catch { res.status(503).json({ error: 'AI backend unavailable' }) } })
+router.post('/friday-nexus/debate',         requireAuth, async (req, res) => { try { res.json(await aiPost('/friday-nexus/debate', req.body)) } catch { res.status(503).json({ error: 'AI backend unavailable' }) } })
+router.post('/friday-nexus/mcts-search',    requireAuth, async (req, res) => { try { res.json(await aiPost('/friday-nexus/mcts-search', req.body)) } catch { res.status(503).json({ error: 'AI backend unavailable' }) } })
+router.post('/friday-nexus/gamwar-detect',  requireAuth, async (req, res) => { try { res.json(await aiPost('/friday-nexus/gamwar-detect', req.body)) } catch { res.status(503).json({ error: 'AI backend unavailable' }) } })
+router.post('/friday-nexus/gamwar-generate',requireAuth, async (req, res) => { try { res.json(await aiPost('/friday-nexus/gamwar-generate', req.body)) } catch { res.status(503).json({ error: 'AI backend unavailable' }) } })

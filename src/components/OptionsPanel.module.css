@@ -222,7 +222,7 @@
 
 .chainHeader {
   display: grid;
-  grid-template-columns: 1fr 36px 36px 90px 36px 36px 1fr;
+  grid-template-columns: 52px 1fr 36px 36px 90px 36px 36px 1fr 52px;
   padding: var(--space-2) var(--space-2);
   background: var(--color-bg-elevated);
   border-bottom: 1px solid var(--color-border);
@@ -249,7 +249,7 @@
 
 .chainRow {
   display: grid;
-  grid-template-columns: 1fr 36px 36px 90px 36px 36px 1fr;
+  grid-template-columns: 52px 1fr 36px 36px 90px 36px 36px 1fr 52px;
   border-bottom: 1px solid var(--color-border-subtle);
   min-height: 32px;
 }
@@ -290,6 +290,15 @@
   font-family: var(--font-mono);
   font-size: 0.6rem;
   color: var(--color-text-muted);
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.chainOICell {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 700;
   text-align: center;
   display: flex;
   align-items: center;

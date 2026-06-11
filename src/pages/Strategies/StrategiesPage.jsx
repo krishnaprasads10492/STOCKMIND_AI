@@ -1,225 +1,77 @@
 /**
- * StrategiesPage — Library of open trading strategies to learn from.
+ * StrategiesPage — AI-powered strategy hub.
  *
- * Features:
- *   - Curated strategy library (built-in + community)
- *   - Filter by instrument, direction, accuracy, complexity
- *   - Each strategy shows: description, parameters, backtest stats, risk profile
- *   - "Apply to Predictions" button — navigates to Predictions with strategy pre-loaded
- *   - InfoTooltip on every key concept
- *   - Per-page tooltip on/off control
+ * Tab 1: Library     — builtin + AI-generated + user-combined strategies with live stats
+ * Tab 2: AI Generate — describe what you want → JARVIS generates strategies
+ * Tab 3: Combine     — select 2+ strategies → AI merges into one
+ * Tab 4: Intel Hub   — image/doc/news → AI analysis → strategy recommendations
+ * Tab 5: Stock Picker— timeframe/risk → AI picks stocks
  */
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useUiPrefsStore } from '@store/uiPrefsStore.js'
 import { ErrorBoundary } from '@components/ErrorBoundary.jsx'
-import { InfoTooltip } from '@components/InfoTooltip.jsx'
 import { Disclaimer } from '@components/Disclaimer.jsx'
+import { GlobalSymbolPicker } from '@components/GlobalSymbolPicker.jsx'
+import { apiFetch } from '@services/apiClient.js'
 import styles from './StrategiesPage.module.css'
 
-const PAGE = 'strategies'
-
-// ── Built-in strategy library ─────────────────────────────────────────────────
-
-const STRATEGIES = [
-  {
-    id: 'rsi-reversal-nifty',
-    name: 'RSI Reversal — NIFTY50',
-    category: 'Mean Reversion',
-    instrType: 'spot',
-    direction: 'both',
-    symbol: 'NIFTY50',
-    complexity: 'beginner',
-    accuracy: 78,
-    avgRR: 1.8,
-    description: 'Buy when RSI(14) drops below 35 (oversold) and price is above EMA(50). Sell when RSI rises above 65 (overbought) and price is below EMA(50).',
-    logic: 'RSI measures momentum. Extreme readings (< 35 or > 65) often precede reversals, especially when the longer-term trend (EMA 50) is intact.',
-    filters: ['rsi14 < 35 (long)', 'rsi14 > 65 (short)', 'price > ema50 (long)', 'price < ema50 (short)'],
-    params: { instrType: 'spot', direction: 'both', minGrade: 'B' },
-    risk: 'medium',
-    bestFor: 'Ranging markets, index trading',
-    avoid: 'Strong trending markets — RSI can stay extreme for extended periods',
-    backtestYears: 3,
-    winRate: 72,
-    maxDrawdown: 8.2,
-    sharpe: 1.4,
-    tags: ['RSI', 'EMA', 'Mean Reversion', 'Index'],
-  },
-  {
-    id: 'breakout-banknifty-futures',
-    name: 'Volume Breakout — BANKNIFTY Futures',
-    category: 'Breakout',
-    instrType: 'futures',
-    direction: 'both',
-    symbol: 'BANKNIFTY',
-    complexity: 'intermediate',
-    accuracy: 76,
-    avgRR: 2.1,
-    description: 'Enter long when price breaks above 20-day high with volume > 1.5x average. Enter short when price breaks below 20-day low with volume > 1.5x average.',
-    logic: 'High-volume breakouts of key levels indicate institutional participation and are more likely to sustain. The 20-day range captures the recent consolidation zone.',
-    filters: ['price > 20d_high (long)', 'price < 20d_low (short)', 'volume > 1.5x_avg'],
-    params: { instrType: 'futures', direction: 'both', minGrade: 'A' },
-    risk: 'high',
-    bestFor: 'Trending markets, high-volatility sessions',
-    avoid: 'Low-volume days, pre-expiry sessions',
-    backtestYears: 3,
-    winRate: 68,
-    maxDrawdown: 14.5,
-    sharpe: 1.1,
-    tags: ['Breakout', 'Volume', 'Futures', 'BANKNIFTY'],
-  },
-  {
-    id: 'atm-ce-low-iv',
-    name: 'ATM Call Buy — Low IV Environment',
-    category: 'Options',
-    instrType: 'options',
-    direction: 'long',
-    symbol: 'NIFTY50',
-    complexity: 'intermediate',
-    accuracy: 74,
-    avgRR: 2.4,
-    description: 'Buy ATM NIFTY CE when IV rank is below 30% (cheap options) and the index is in an uptrend (price > EMA 20). Target 50–100% premium gain.',
-    logic: 'Buying options when IV is low means you pay less for the same exposure. Combined with a bullish trend, this gives a favourable risk-reward.',
-    filters: ['iv_rank < 30%', 'price > ema20', 'days_to_expiry > 7'],
-    params: { instrType: 'options', direction: 'long', minGrade: 'B' },
-    risk: 'medium',
-    bestFor: 'Pre-event plays, trending markets with low volatility',
-    avoid: 'High IV environments (IV > 25%) — options are expensive',
-    backtestYears: 2,
-    winRate: 65,
-    maxDrawdown: 35.0,
-    sharpe: 0.9,
-    tags: ['Options', 'IV', 'ATM', 'NIFTY', 'Trend'],
-  },
-  {
-    id: 'ema-crossover-equities',
-    name: 'EMA Crossover — Indian Equities',
-    category: 'Trend Following',
-    instrType: 'spot',
-    direction: 'both',
-    symbol: 'Any',
-    complexity: 'beginner',
-    accuracy: 75,
-    avgRR: 2.0,
-    description: 'Buy when EMA(20) crosses above EMA(50). Sell when EMA(20) crosses below EMA(50). Use on daily timeframe for swing trades.',
-    logic: 'EMA crossovers capture medium-term trend changes. The 20/50 combination is widely used and tends to filter out short-term noise while catching meaningful moves.',
-    filters: ['ema20 > ema50 (long)', 'ema20 < ema50 (short)', 'adx14 > 20'],
-    params: { instrType: 'spot', direction: 'both', minGrade: 'C' },
-    risk: 'low',
-    bestFor: 'Trending equities, swing trading',
-    avoid: 'Choppy/ranging markets — generates false signals',
-    backtestYears: 3,
-    winRate: 70,
-    maxDrawdown: 6.8,
-    sharpe: 1.6,
-    tags: ['EMA', 'Crossover', 'Trend', 'Equities', 'Swing'],
-  },
-  {
-    id: 'put-sell-high-iv',
-    name: 'OTM Put Sell — High IV',
-    category: 'Options Income',
-    instrType: 'options',
-    direction: 'short',
-    symbol: 'NIFTY50',
-    complexity: 'advanced',
-    accuracy: 82,
-    avgRR: 0.6,
-    description: 'Sell OTM puts (1–2 strikes below ATM) when IV rank > 70%. Collect premium decay. Close at 50% profit or 2x loss.',
-    logic: 'High IV means options are expensive. Selling premium when IV is elevated captures the mean-reversion of volatility. OTM puts have high probability of expiring worthless.',
-    filters: ['iv_rank > 70%', 'strike = atm - 1 to 2 steps', 'days_to_expiry 7–21'],
-    params: { instrType: 'options', direction: 'short', minGrade: 'A' },
-    risk: 'high',
-    bestFor: 'High IV environments, range-bound markets',
-    avoid: 'Trending markets, pre-event (earnings, budget, RBI policy)',
-    backtestYears: 2,
-    winRate: 78,
-    maxDrawdown: 42.0,
-    sharpe: 1.2,
-    tags: ['Options', 'Premium Selling', 'IV', 'NIFTY', 'Income'],
-  },
-  {
-    id: 'macd-momentum-crypto',
-    name: 'MACD Momentum — Crypto',
-    category: 'Momentum',
-    instrType: 'spot',
-    direction: 'both',
-    symbol: 'BTCUSDT',
-    complexity: 'beginner',
-    accuracy: 71,
-    avgRR: 2.3,
-    description: 'Buy when MACD histogram turns positive and price is above EMA(20). Sell when MACD histogram turns negative and price is below EMA(20).',
-    logic: 'MACD captures momentum shifts. Combining with EMA trend filter reduces false signals in crypto\'s volatile environment.',
-    filters: ['macd_hist > 0 (long)', 'macd_hist < 0 (short)', 'price vs ema20 confirmation'],
-    params: { instrType: 'spot', direction: 'both', minGrade: 'B' },
-    risk: 'high',
-    bestFor: 'Crypto trending phases',
-    avoid: 'Sideways crypto markets, low-liquidity altcoins',
-    backtestYears: 2,
-    winRate: 63,
-    maxDrawdown: 22.0,
-    sharpe: 0.8,
-    tags: ['MACD', 'Momentum', 'Crypto', 'BTC'],
-  },
-  {
-    id: 'vwap-intraday-nifty',
-    name: 'VWAP Reversion — NIFTY Intraday',
-    category: 'Mean Reversion',
-    instrType: 'spot',
-    direction: 'both',
-    symbol: 'NIFTY50',
-    complexity: 'intermediate',
-    accuracy: 77,
-    avgRR: 1.5,
-    description: 'Buy when price dips 0.5% below VWAP with RSI < 40. Sell when price rises 0.5% above VWAP with RSI > 60. Target VWAP as T1.',
-    logic: 'VWAP acts as a magnet for intraday price. Deviations from VWAP tend to revert, especially in liquid instruments like NIFTY.',
-    filters: ['price < vwap - 0.5% (long)', 'price > vwap + 0.5% (short)', 'rsi14 confirmation'],
-    params: { instrType: 'spot', direction: 'both', minGrade: 'B' },
-    risk: 'low',
-    bestFor: 'Intraday trading, liquid indices',
-    avoid: 'Strong trending days, news-driven moves',
-    backtestYears: 2,
-    winRate: 71,
-    maxDrawdown: 5.5,
-    sharpe: 1.8,
-    tags: ['VWAP', 'Intraday', 'Mean Reversion', 'NIFTY'],
-  },
-  {
-    id: 'bollinger-squeeze-breakout',
-    name: 'Bollinger Band Squeeze Breakout',
-    category: 'Breakout',
-    instrType: 'spot',
-    direction: 'both',
-    symbol: 'Any',
-    complexity: 'intermediate',
-    accuracy: 73,
-    avgRR: 2.5,
-    description: 'Wait for Bollinger Band width to compress to a 6-month low (squeeze). Enter in the direction of the first candle that closes outside the bands.',
-    logic: 'Low volatility (squeeze) precedes high volatility (expansion). The breakout direction after a squeeze tends to be sustained.',
-    filters: ['bb_width < 6m_low', 'close outside bands', 'volume confirmation'],
-    params: { instrType: 'spot', direction: 'both', minGrade: 'A' },
-    risk: 'medium',
-    bestFor: 'Post-consolidation breakouts, any liquid instrument',
-    avoid: 'Already trending instruments — squeeze may not form',
-    backtestYears: 3,
-    winRate: 66,
-    maxDrawdown: 11.0,
-    sharpe: 1.3,
-    tags: ['Bollinger', 'Squeeze', 'Breakout', 'Volatility'],
-  },
+const TABS = [
+  { id: 'library',  label: '📚 Library' },
+  { id: 'generate', label: '🤖 AI Generate' },
+  { id: 'combine',  label: '🔗 Combine' },
+  { id: 'intel',    label: '🧠 Intel Hub' },
+  { id: 'picker',   label: '🎯 Stock Picker' },
 ]
 
-// ── Filters ───────────────────────────────────────────────────────────────────
-
-const CATEGORIES = ['All', 'Trend Following', 'Mean Reversion', 'Breakout', 'Momentum', 'Options', 'Options Income']
-const INSTRUMENTS = ['All', 'spot', 'futures', 'options']
-const COMPLEXITIES = ['All', 'beginner', 'intermediate', 'advanced']
+const CATEGORIES = ['All','Trend Following','Mean Reversion','Breakout','Momentum','Options','Options Income','Long Term','Combined','AI Generated']
+const INSTRUMENTS = ['All','spot','futures','options']
+const COMPLEXITIES = ['All','beginner','intermediate','advanced']
 
 export default function StrategiesPage() {
-  const navigate = useNavigate()
-  const { isTooltipVisible, showExamples, setShowExamples, setPageTooltips } = useUiPrefsStore()
-  const pageEnabled = isTooltipVisible(PAGE)
+  const [activeTab, setActiveTab] = useState('library')
 
+  return (
+    <div className={styles.page}>
+      <div className={styles.pageHeader}>
+        <div>
+          <h1 className={styles.title}>Strategy Intelligence</h1>
+          <p className={styles.subtitle}>AI-powered strategies · web-researched · backtested · wealth-focused</p>
+        </div>
+      </div>
+
+      <div className={styles.tabs} role="tablist">
+        {TABS.map(t => (
+          <button
+            key={t.id}
+            role="tab"
+            aria-selected={activeTab === t.id}
+            className={`${styles.tab} ${activeTab === t.id ? styles.tabActive : ''}`}
+            onClick={() => setActiveTab(t.id)}
+          >{t.label}</button>
+        ))}
+      </div>
+
+      <ErrorBoundary>
+        {activeTab === 'library'  && <LibraryTab />}
+        {activeTab === 'generate' && <GenerateTab />}
+        {activeTab === 'combine'  && <CombineTab />}
+        {activeTab === 'intel'    && <IntelTab />}
+        {activeTab === 'picker'   && <PickerTab />}
+      </ErrorBoundary>
+
+      <Disclaimer />
+    </div>
+  )
+}
+
+// ── Tab 1: Library ────────────────────────────────────────────────────────────
+
+function LibraryTab() {
+  const navigate = useNavigate()
+  const [strategies, setStrategies] = useState([])
+  const [loading, setLoading]       = useState(true)
+  const [error, setError]           = useState(null)
   const [category,   setCategory]   = useState('All')
   const [instrType,  setInstrType]  = useState('All')
   const [complexity, setComplexity] = useState('All')
@@ -227,129 +79,256 @@ export default function StrategiesPage() {
   const [search,     setSearch]     = useState('')
   const [expanded,   setExpanded]   = useState(null)
 
-  const filtered = useMemo(() => {
-    return STRATEGIES.filter(s => {
-      if (category   !== 'All' && s.category   !== category)   return false
-      if (instrType  !== 'All' && s.instrType  !== instrType)  return false
-      if (complexity !== 'All' && s.complexity !== complexity) return false
-      if (s.accuracy < minAcc) return false
-      if (search && !s.name.toLowerCase().includes(search.toLowerCase()) &&
-          !s.tags.some(t => t.toLowerCase().includes(search.toLowerCase()))) return false
-      return true
-    })
-  }, [category, instrType, complexity, minAcc, search])
+  useEffect(() => {
+    apiFetch('/api/strategy-ai/library')
+      .then(d => { if (d.ok) setStrategies(d.strategies ?? []) })
+      .catch(e => setError(e.message))
+      .finally(() => setLoading(false))
+  }, [])
 
-  function handleApply(strategy) {
-    navigate(`/predictions?module=${encodeURIComponent(strategy.symbol === 'Any' ? 'indices-india' : 'fno-india')}&strategy=${encodeURIComponent(strategy.id)}`)
+  const filtered = useMemo(() => strategies.filter(s => {
+    if (category   !== 'All' && s.category   !== category)   return false
+    if (instrType  !== 'All' && s.instrType  !== instrType)  return false
+    if (complexity !== 'All' && s.complexity !== complexity) return false
+    if ((s.accuracy ?? 0) < minAcc) return false
+    if (search) {
+      const q = search.toLowerCase()
+      if (!s.name?.toLowerCase().includes(q) && !(s.tags ?? []).some(t => t.toLowerCase().includes(q))) return false
+    }
+    return true
+  }), [strategies, category, instrType, complexity, minAcc, search])
+
+  function handleApply(s) {
+    navigate(`/predictions?module=${encodeURIComponent(s.symbol === 'Any' ? 'indices-india' : 'fno-india')}&strategy=${encodeURIComponent(s.id)}`)
   }
 
+  if (loading) return <div className={styles.loading}>Loading strategy library…</div>
+  if (error)   return <div className={styles.errorMsg}>Failed to load: {error}</div>
+
   return (
-    <div className={styles.page}>
-      {/* ── Header ── */}
-      <div className={styles.pageHeader}>
-        <div>
-          <h1 className={styles.title}>
-            Strategy Library
-            <InfoTooltip
-              page={PAGE}
-              title="Strategy Library"
-              content="A curated collection of open trading strategies. Each strategy has been backtested on 2–3 years of historical data. Use them as-is or as inspiration for your own."
-              example={{ text: 'The RSI Reversal strategy has 78% accuracy on NIFTY50 over 3 years — meaning it correctly predicted direction 78 out of 100 times.' }}
-            />
-          </h1>
-          <p className={styles.subtitle}>
-            {STRATEGIES.length} open strategies · backtested · ready to apply
-          </p>
-        </div>
-
-        <div className={styles.tooltipControls}>
-          <label className={styles.tooltipToggle}>
-            <input type="checkbox" checked={pageEnabled}
-              onChange={e => setPageTooltips(PAGE, e.target.checked)} />
-            <span>ⓘ Tips on this page</span>
-          </label>
-          {pageEnabled && (
-            <label className={styles.tooltipToggle}>
-              <input type="checkbox" checked={showExamples}
-                onChange={e => setShowExamples(e.target.checked)} />
-              <span>Show examples</span>
-            </label>
-          )}
-        </div>
-      </div>
-
-      {/* ── Filters ── */}
+    <div className={styles.tabContent}>
       <div className={styles.filters}>
-        <input
-          className={styles.searchInput}
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="Search strategies or tags…"
-          aria-label="Search strategies"
-        />
-
-        <FilterGroup label="Category" value={category} options={CATEGORIES} onChange={setCategory} />
-        <FilterGroup label="Instrument" value={instrType} options={INSTRUMENTS} onChange={setInstrType} />
+        <input className={styles.searchInput} value={search}
+          onChange={e => setSearch(e.target.value)} placeholder="Search strategies or tags…" aria-label="Search" />
+        <FilterGroup label="Category"   value={category}   options={CATEGORIES}   onChange={setCategory} />
+        <FilterGroup label="Instrument" value={instrType}  options={INSTRUMENTS}  onChange={setInstrType} />
         <FilterGroup label="Complexity" value={complexity} options={COMPLEXITIES} onChange={setComplexity} />
-
         <div className={styles.accFilter}>
-          <label className={styles.accFilterLabel}>
-            Min Accuracy
-            <InfoTooltip page={PAGE} title="Minimum Accuracy" content="Filter strategies by their historical backtest accuracy. 75%+ is considered stable." />
-          </label>
+          <label className={styles.accFilterLabel}>Min Accuracy</label>
           <div className={styles.accFilterRow}>
             <input type="range" min={0} max={90} step={5} value={minAcc}
-              onChange={e => setMinAcc(Number(e.target.value))}
-              className={styles.accSlider} aria-label={`Minimum accuracy: ${minAcc}%`} />
+              onChange={e => setMinAcc(Number(e.target.value))} className={styles.accSlider}
+              aria-label={`Min accuracy ${minAcc}%`} />
             <span className={styles.accVal}>{minAcc}%+</span>
           </div>
         </div>
       </div>
-
-      {/* ── Results count ── */}
-      <div className={styles.resultsCount}>
-        {filtered.length} {filtered.length === 1 ? 'strategy' : 'strategies'} found
-      </div>
-
-      {/* ── Strategy cards ── */}
-      {filtered.length === 0 ? (
-        <div className={styles.empty}>No strategies match your filters. Try adjusting the criteria.</div>
-      ) : (
-        <div className={styles.grid}>
-          {filtered.map(s => (
-            <ErrorBoundary key={s.id}>
-              <StrategyCard
-                strategy={s}
-                expanded={expanded === s.id}
-                onToggle={() => setExpanded(expanded === s.id ? null : s.id)}
-                onApply={() => handleApply(s)}
-                page={PAGE}
-              />
-            </ErrorBoundary>
-          ))}
-        </div>
-      )}
-
-      <Disclaimer />
+      <div className={styles.resultsCount}>{filtered.length} strategies</div>
+      {filtered.length === 0
+        ? <div className={styles.empty}>No strategies match your filters.</div>
+        : <div className={styles.grid}>
+            {filtered.map(s => (
+              <ErrorBoundary key={s.id}>
+                <StrategyCard strategy={s} expanded={expanded === s.id}
+                  onToggle={() => setExpanded(expanded === s.id ? null : s.id)}
+                  onApply={() => handleApply(s)} />
+              </ErrorBoundary>
+            ))}
+          </div>
+      }
     </div>
   )
 }
 
-// ── Filter group ──────────────────────────────────────────────────────────────
+// ── Tab 2: AI Generate ────────────────────────────────────────────────────────
 
-function FilterGroup({ label, value, options, onChange }) {
+function GenerateTab() {
+  const [request,    setRequest]    = useState('')
+  const [symbol,     setSymbol]     = useState('')
+  const [instrType,  setInstrType]  = useState('spot')
+  const [timeframe,  setTimeframe]  = useState('daily')
+  const [riskLevel,  setRiskLevel]  = useState('medium')
+  const [loading,    setLoading]    = useState(false)
+  const [result,     setResult]     = useState(null)
+  const [error,      setError]      = useState(null)
+  const [saved,      setSaved]      = useState({})
+
+  async function generate() {
+    if (!request.trim()) return
+    setLoading(true); setError(null); setResult(null)
+    try {
+      const d = await apiFetch('/api/strategy-ai/generate', {
+        method: 'POST',
+        body: JSON.stringify({ request, symbol, instrType, timeframe, riskLevel, webSearch: true }),
+      })
+      if (d.ok) setResult(d)
+      else setError(d.error ?? 'Generation failed')
+    } catch (e) { setError(e.message) }
+    finally { setLoading(false) }
+  }
+
+  async function saveStrategy(s) {
+    try {
+      const d = await apiFetch('/api/strategy-ai/save', { method: 'POST', body: JSON.stringify({ strategy: s }) })
+      if (d.ok) setSaved(prev => ({ ...prev, [s.id]: true }))
+    } catch {}
+  }
+
   return (
-    <div className={styles.filterGroup}>
-      <span className={styles.filterLabel}>{label}</span>
-      <div className={styles.filterBtns}>
-        {options.map(opt => (
-          <button
-            key={opt}
-            type="button"
-            className={`${styles.filterBtn} ${value === opt ? styles.filterBtnActive : ''}`}
-            onClick={() => onChange(opt)}
-          >
-            {opt}
+    <div className={styles.tabContent}>
+      <div className={styles.genForm}>
+        <div className={styles.genFormRow}>
+          <div className={styles.genField} style={{ flex: 3 }}>
+            <label className={styles.genLabel}>What strategy do you need?</label>
+            <textarea className={styles.genTextarea} rows={3} value={request}
+              onChange={e => setRequest(e.target.value)}
+              placeholder="e.g. I want a strategy for NIFTY options when market is volatile, low risk, for intraday. Or: give me a long-term wealth creation strategy for mid-cap stocks." />
+          </div>
+        </div>
+        <div className={styles.genFormRow}>
+          <div className={styles.genField}>
+            <label className={styles.genLabel}>Symbol (optional)</label>
+            <GlobalSymbolPicker value={symbol} onChange={setSymbol} placeholder="Any symbol" />
+          </div>
+          <div className={styles.genField}>
+            <label className={styles.genLabel}>Instrument</label>
+            <select className={styles.genSelect} value={instrType} onChange={e => setInstrType(e.target.value)}>
+              <option value="spot">Spot / Equity</option>
+              <option value="futures">Futures</option>
+              <option value="options">Options</option>
+            </select>
+          </div>
+          <div className={styles.genField}>
+            <label className={styles.genLabel}>Timeframe</label>
+            <select className={styles.genSelect} value={timeframe} onChange={e => setTimeframe(e.target.value)}>
+              <option value="intraday">Intraday</option>
+              <option value="daily">Daily / Swing</option>
+              <option value="weekly">Weekly</option>
+              <option value="monthly">Monthly+</option>
+            </select>
+          </div>
+          <div className={styles.genField}>
+            <label className={styles.genLabel}>Risk Level</label>
+            <select className={styles.genSelect} value={riskLevel} onChange={e => setRiskLevel(e.target.value)}>
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </select>
+          </div>
+        </div>
+        <button className={styles.genBtn} onClick={generate} disabled={loading || !request.trim()}>
+          {loading ? '⏳ Generating…' : '🤖 Generate Strategies with AI'}
+        </button>
+        {error && <div className={styles.errorMsg}>{error}</div>}
+      </div>
+
+      {result && (
+        <div className={styles.genResults}>
+          <div className={styles.genResultsHeader}>
+            <span className={styles.genResultsTitle}>
+              {result.strategies.length} strategies generated
+              {result.webContext && <span className={styles.webBadge}>🌐 Web-researched</span>}
+            </span>
+          </div>
+          {result.webContext?.abstract && (
+            <div className={styles.webContext}>
+              <span className={styles.webContextLabel}>Web context:</span> {result.webContext.abstract}
+            </div>
+          )}
+          <div className={styles.grid}>
+            {result.strategies.map(s => (
+              <ErrorBoundary key={s.id}>
+                <StrategyCard strategy={s} expanded={false} onToggle={() => {}}
+                  onApply={() => {}}
+                  extraAction={
+                    <button className={styles.saveBtn} onClick={() => saveStrategy(s)} disabled={saved[s.id]}>
+                      {saved[s.id] ? '✓ Saved' : '💾 Save to Library'}
+                    </button>
+                  } />
+              </ErrorBoundary>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Tab 3: Combine ────────────────────────────────────────────────────────────
+
+function CombineTab() {
+  const [strategies, setStrategies] = useState([])
+  const [loading,    setLoading]    = useState(true)
+  const [selected,   setSelected]   = useState([])
+  const [name,       setName]       = useState('')
+  const [combining,  setCombining]  = useState(false)
+  const [result,     setResult]     = useState(null)
+  const [error,      setError]      = useState(null)
+
+  useEffect(() => {
+    apiFetch('/api/strategy-ai/library')
+      .then(d => { if (d.ok) setStrategies(d.strategies ?? []) })
+      .finally(() => setLoading(false))
+  }, [])
+
+  function toggleSelect(id) {
+    setSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+
+  async function combine() {
+    if (selected.length < 2) return
+    setCombining(true); setError(null); setResult(null)
+    try {
+      const d = await apiFetch('/api/strategy-ai/combine', {
+        method: 'POST',
+        body: JSON.stringify({ strategyIds: selected, name: name.trim() || undefined }),
+      })
+      if (d.ok) setResult(d.strategy)
+      else setError(d.error ?? 'Combine failed')
+    } catch (e) { setError(e.message) }
+    finally { setCombining(false) }
+  }
+
+  if (loading) return <div className={styles.loading}>Loading strategies…</div>
+
+  return (
+    <div className={styles.tabContent}>
+      <div className={styles.combineInfo}>
+        <span className={styles.combineInfoText}>
+          Select 2 or more strategies to combine. The AI merges all their conditions into one powerful multi-confirmation strategy.
+        </span>
+        <span className={styles.combineCount}>{selected.length} selected</span>
+      </div>
+
+      <div className={styles.combineForm}>
+        <input className={styles.genInput} value={name} onChange={e => setName(e.target.value)}
+          placeholder="Combined strategy name (optional)" />
+        <button className={styles.genBtn} onClick={combine} disabled={selected.length < 2 || combining}>
+          {combining ? '⏳ Combining…' : `🔗 Combine ${selected.length} Strategies`}
+        </button>
+      </div>
+      {error && <div className={styles.errorMsg}>{error}</div>}
+
+      {result && (
+        <div className={styles.combineResult}>
+          <div className={styles.combineResultLabel}>✅ Combined Strategy Created</div>
+          <StrategyCard strategy={result} expanded={true} onToggle={() => {}} onApply={() => {}} />
+        </div>
+      )}
+
+      <div className={styles.combineGrid}>
+        {strategies.map(s => (
+          <button key={s.id} type="button"
+            className={`${styles.combineCard} ${selected.includes(s.id) ? styles.combineCardSelected : ''}`}
+            onClick={() => toggleSelect(s.id)}
+            aria-pressed={selected.includes(s.id)}>
+            <div className={styles.combineCardName}>{s.name}</div>
+            <div className={styles.combineCardMeta}>
+              <span>{s.category}</span>
+              <span className={s.accuracy >= 75 ? styles.accGood : styles.accWarn}>{s.accuracy}%</span>
+              <span>{s.instrType}</span>
+            </div>
+            {selected.includes(s.id) && <span className={styles.combineCheck}>✓</span>}
           </button>
         ))}
       </div>
@@ -357,142 +336,368 @@ function FilterGroup({ label, value, options, onChange }) {
   )
 }
 
-// ── Strategy card ─────────────────────────────────────────────────────────────
+// ── Tab 4: Intel Hub ──────────────────────────────────────────────────────────
 
-function StrategyCard({ strategy: s, expanded, onToggle, onApply, page }) {
-  const riskColor = s.risk === 'low' ? 'var(--color-bull)' : s.risk === 'medium' ? 'var(--color-warn)' : 'var(--color-bear)'
-  const accColor  = s.accuracy >= 75 ? 'var(--color-bull)' : s.accuracy >= 65 ? 'var(--color-warn)' : 'var(--color-bear)'
+function IntelTab() {
+  const [symbol,     setSymbol]     = useState('')
+  const [timeframe,  setTimeframe]  = useState('1 month')
+  const [question,   setQuestion]   = useState('')
+  const [newsInput,  setNewsInput]  = useState('')
+  const [docText,    setDocText]    = useState('')
+  const [imageB64,   setImageB64]   = useState(null)
+  const [imageName,  setImageName]  = useState(null)
+  const [loading,    setLoading]    = useState(false)
+  const [result,     setResult]     = useState(null)
+  const [error,      setError]      = useState(null)
+  const fileRef = useRef()
+
+  function handleImageFile(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImageName(file.name)
+    const reader = new FileReader()
+    reader.onload = ev => setImageB64(ev.target.result.split(',')[1])
+    reader.readAsDataURL(file)
+  }
+
+  async function analyze() {
+    setLoading(true); setError(null); setResult(null)
+    const headlines = newsInput.split('\n').map(s => s.trim()).filter(Boolean)
+    try {
+      const d = await apiFetch('/api/strategy-ai/intel', {
+        method: 'POST',
+        body: JSON.stringify({
+          symbol: symbol || undefined,
+          timeframe,
+          question: question || undefined,
+          newsHeadlines: headlines.length ? headlines : undefined,
+          docText: docText || undefined,
+          imageBase64: imageB64 || undefined,
+        }),
+      })
+      if (d.ok) setResult(d)
+      else setError(d.error ?? 'Analysis failed')
+    } catch (e) { setError(e.message) }
+    finally { setLoading(false) }
+  }
 
   return (
-    <article className={`${styles.card} ${expanded ? styles.cardExpanded : ''}`}
-      aria-label={`Strategy: ${s.name}`}>
-      {/* ── Card header ── */}
+    <div className={styles.tabContent}>
+      <div className={styles.intelDesc}>
+        Feed any combination of inputs — chart images, financial documents, news headlines — and get AI-powered analysis with strategy recommendations.
+      </div>
+
+      <div className={styles.intelForm}>
+        <div className={styles.intelRow}>
+          <div className={styles.genField}>
+            <label className={styles.genLabel}>Symbol (optional)</label>
+            <GlobalSymbolPicker value={symbol} onChange={setSymbol} placeholder="Any symbol" />
+          </div>
+          <div className={styles.genField}>
+            <label className={styles.genLabel}>Timeframe</label>
+            <select className={styles.genSelect} value={timeframe} onChange={e => setTimeframe(e.target.value)}>
+              <option>Intraday</option><option>1 week</option><option>1 month</option>
+              <option>3 months</option><option>6 months</option><option>1 year</option>
+            </select>
+          </div>
+        </div>
+
+        <div className={styles.genField}>
+          <label className={styles.genLabel}>Your question / analysis request</label>
+          <textarea className={styles.genTextarea} rows={2} value={question}
+            onChange={e => setQuestion(e.target.value)}
+            placeholder="e.g. Is this stock a good buy? What does this chart pattern suggest? Should I hold or exit?" />
+        </div>
+
+        <div className={styles.intelRow}>
+          <div className={styles.genField} style={{ flex: 1 }}>
+            <label className={styles.genLabel}>📰 News headlines (one per line)</label>
+            <textarea className={styles.genTextarea} rows={4} value={newsInput}
+              onChange={e => setNewsInput(e.target.value)}
+              placeholder={'RBI holds rates at 6.5%\nNifty hits all-time high\nReliance Q4 profit up 18%'} />
+          </div>
+          <div className={styles.genField} style={{ flex: 1 }}>
+            <label className={styles.genLabel}>📄 Financial document / statement text</label>
+            <textarea className={styles.genTextarea} rows={4} value={docText}
+              onChange={e => setDocText(e.target.value)}
+              placeholder="Paste balance sheet, P&L, annual report excerpts, or any financial text…" />
+          </div>
+        </div>
+
+        <div className={styles.genField}>
+          <label className={styles.genLabel}>📊 Chart / image upload</label>
+          <div className={styles.imageUpload} onClick={() => fileRef.current?.click()}>
+            {imageName
+              ? <span className={styles.imageUploaded}>✓ {imageName}</span>
+              : <span className={styles.imageUploadHint}>Click to upload chart image (PNG/JPG)</span>}
+          </div>
+          <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageFile} />
+        </div>
+
+        <button className={styles.genBtn} onClick={analyze}
+          disabled={loading || (!symbol && !question && !newsInput && !docText && !imageB64)}>
+          {loading ? '⏳ Analyzing…' : '🧠 Analyze & Get Strategy Recommendations'}
+        </button>
+        {error && <div className={styles.errorMsg}>{error}</div>}
+      </div>
+
+      {result && (
+        <div className={styles.intelResult}>
+          <div className={styles.intelResultHeader}>
+            <span className={styles.intelResultTitle}>AI Analysis</span>
+            <span className={styles.intelResultMeta}>{result.symbol ?? 'Market'} · {timeframe}</span>
+          </div>
+          <div className={styles.intelContent}>{result.analysis?.content}</div>
+          {result.inputSummary && (
+            <div className={styles.intelSummary}>Inputs analyzed: {result.inputSummary}</div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Tab 5: Stock Picker ───────────────────────────────────────────────────────
+
+function PickerTab() {
+  const [timeframe,  setTimeframe]  = useState('3-6 months')
+  const [riskLevel,  setRiskLevel]  = useState('medium')
+  const [capital,    setCapital]    = useState(100000)
+  const [sector,     setSector]     = useState('')
+  const [instrType,  setInstrType]  = useState('Equity')
+  const [loading,    setLoading]    = useState(false)
+  const [result,     setResult]     = useState(null)
+  const [error,      setError]      = useState(null)
+
+  async function pick() {
+    setLoading(true); setError(null); setResult(null)
+    try {
+      const d = await apiFetch('/api/strategy-ai/stock-pick', {
+        method: 'POST',
+        body: JSON.stringify({ timeframe, riskLevel, capital: Number(capital), sector, instrType }),
+      })
+      if (d.ok) setResult(d)
+      else setError(d.error ?? 'Stock pick failed')
+    } catch (e) { setError(e.message) }
+    finally { setLoading(false) }
+  }
+
+  return (
+    <div className={styles.tabContent}>
+      <div className={styles.intelDesc}>
+        AI picks the best stocks/instruments for your timeframe and risk profile. All picks are AI-generated suggestions — not financial advice.
+      </div>
+
+      <div className={styles.pickerForm}>
+        <div className={styles.intelRow}>
+          <div className={styles.genField}>
+            <label className={styles.genLabel}>Timeframe</label>
+            <select className={styles.genSelect} value={timeframe} onChange={e => setTimeframe(e.target.value)}>
+              <option>1-3 months</option><option>3-6 months</option>
+              <option>6-12 months</option><option>1-2 years</option><option>2+ years</option>
+            </select>
+          </div>
+          <div className={styles.genField}>
+            <label className={styles.genLabel}>Risk Level</label>
+            <select className={styles.genSelect} value={riskLevel} onChange={e => setRiskLevel(e.target.value)}>
+              <option value="low">Low (Large Cap)</option>
+              <option value="medium">Medium (Mid Cap)</option>
+              <option value="high">High (Small Cap / F&O)</option>
+            </select>
+          </div>
+          <div className={styles.genField}>
+            <label className={styles.genLabel}>Capital (₹)</label>
+            <input className={styles.genInput} type="number" value={capital}
+              onChange={e => setCapital(e.target.value)} min={10000} step={10000} />
+          </div>
+          <div className={styles.genField}>
+            <label className={styles.genLabel}>Sector (optional)</label>
+            <select className={styles.genSelect} value={sector} onChange={e => setSector(e.target.value)}>
+              <option value="">Any</option>
+              <option>Banking</option><option>IT</option><option>Pharma</option>
+              <option>Auto</option><option>FMCG</option><option>Energy</option>
+              <option>Infra</option><option>Metals</option><option>Realty</option>
+            </select>
+          </div>
+          <div className={styles.genField}>
+            <label className={styles.genLabel}>Instrument</label>
+            <select className={styles.genSelect} value={instrType} onChange={e => setInstrType(e.target.value)}>
+              <option>Equity</option><option>F&O</option><option>ETF</option><option>Index</option>
+            </select>
+          </div>
+        </div>
+        <button className={styles.genBtn} onClick={pick} disabled={loading}>
+          {loading ? '⏳ Picking…' : '🎯 Pick Best Stocks with AI'}
+        </button>
+        {error && <div className={styles.errorMsg}>{error}</div>}
+      </div>
+
+      {result && (
+        <div className={styles.pickerResults}>
+          <div className={styles.pickerResultsHeader}>
+            AI Stock Picks · {result.timeframe} · {result.riskLevel} risk
+          </div>
+          <div className={styles.pickerGrid}>
+            {(result.picks ?? []).map((p, i) => (
+              <div key={i} className={styles.pickerCard}>
+                <div className={styles.pickerCardTop}>
+                  <span className={styles.pickerSymbol}>{p.symbol ?? p.ticker ?? `Pick ${i+1}`}</span>
+                  <span className={styles.pickerConf} style={{ color: (p.confidence ?? 70) >= 75 ? 'var(--color-bull)' : 'var(--color-warn)' }}>
+                    {p.confidence ?? 70}% confidence
+                  </span>
+                </div>
+                {p.name && <div className={styles.pickerName}>{p.name}</div>}
+                {p.rationale && <div className={styles.pickerRationale}>{p.rationale}</div>}
+                <div className={styles.pickerMeta}>
+                  {p.target && <span>🎯 Target: {p.target}</span>}
+                  {p.stopLoss && <span>🛑 SL: {p.stopLoss}</span>}
+                  {p.risk && <span className={p.risk === 'low' ? styles.accGood : styles.accWarn}>Risk: {p.risk}</span>}
+                </div>
+                {p.riskFactors && <div className={styles.pickerRisk}>⚠ {p.riskFactors}</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Shared: Strategy Card ─────────────────────────────────────────────────────
+
+function StrategyCard({ strategy: s, expanded, onToggle, onApply, extraAction }) {
+  const navigate = useNavigate()
+  const stats    = s.stats ?? {}
+  const total    = (stats.hits ?? 0) + (stats.misses ?? 0)
+  const liveAcc  = total > 0 ? Math.round(stats.hits / total * 100) : null
+  const accColor = (s.accuracy ?? 0) >= 75 ? 'var(--color-bull)' : (s.accuracy ?? 0) >= 65 ? 'var(--color-warn)' : 'var(--color-bear)'
+
+  const sourceLabel = s.source === 'ai_generated' ? '🤖 AI' : s.source === 'user_combined' ? '🔗 Combined' : s.source === 'user_created' ? '👤 User' : '📚 Built-in'
+
+  return (
+    <article className={`${styles.card} ${expanded ? styles.cardExpanded : ''}`} aria-label={`Strategy: ${s.name}`}>
       <div className={styles.cardHead}>
         <div className={styles.cardHeadLeft}>
-          <span className={styles.cardCategory}>{s.category}</span>
+          <div className={styles.cardTopRow}>
+            <span className={styles.cardCategory}>{s.category}</span>
+            <span className={styles.sourceTag}>{sourceLabel}</span>
+          </div>
           <h3 className={styles.cardName}>{s.name}</h3>
           <div className={styles.cardBadges}>
             <span className={`${styles.badge} ${styles[`instr_${s.instrType}`]}`}>{s.instrType}</span>
-            <span className={`${styles.badge} ${s.direction === 'long' ? styles.dirLong : s.direction === 'short' ? styles.dirShort : styles.dirBoth}`}>
-              {s.direction}
-            </span>
+            <span className={`${styles.badge} ${s.direction === 'long' ? styles.dirLong : s.direction === 'short' ? styles.dirShort : styles.dirBoth}`}>{s.direction}</span>
             <span className={`${styles.badge} ${styles[`cx_${s.complexity}`]}`}>{s.complexity}</span>
           </div>
         </div>
-
         <div className={styles.cardHeadRight}>
           <div className={styles.accBlock}>
-            <span className={styles.accNum} style={{ color: accColor }}>{s.accuracy}%</span>
-            <span className={styles.accLabel}>
-              accuracy
-              <InfoTooltip page={page} title="Backtest Accuracy"
-                content={`This strategy correctly predicted direction ${s.accuracy}% of the time over ${s.backtestYears} years of backtesting.`}
-                example={{ text: `${s.accuracy}% means ~${100 - s.accuracy}% chance of being wrong on any given signal.` }} />
-            </span>
+            <span className={styles.accNum} style={{ color: accColor }}>{s.accuracy ?? '—'}%</span>
+            <span className={styles.accLabel}>backtest</span>
           </div>
         </div>
       </div>
 
-      {/* ── Quick stats ── */}
-      <div className={styles.quickStats}>
-        <QuickStat label="Win Rate" value={`${s.winRate}%`} color={s.winRate >= 65 ? 'bull' : 'warn'} page={page}
-          info="Percentage of signals that hit T1 or better" />
-        <QuickStat label="Avg R:R" value={`1:${s.avgRR}`} color="neutral" page={page}
-          info="Average risk-to-reward ratio" />
-        <QuickStat label="Max DD" value={`${s.maxDrawdown}%`} color="bear" page={page}
-          info="Maximum drawdown during backtest" />
-        <QuickStat label="Sharpe" value={s.sharpe} color="neutral" page={page}
-          info="Sharpe ratio — higher is better. >1 is good." />
-        <QuickStat label="Risk" value={s.risk} color={s.risk === 'low' ? 'bull' : s.risk === 'medium' ? 'warn' : 'bear'} page={page}
-          info="Overall risk level of this strategy" />
+      {/* Live stats row */}
+      <div className={styles.statsRow}>
+        <div className={styles.statItem}>
+          <span className={styles.statLabel}>Applied</span>
+          <span className={styles.statVal}>{stats.applied ?? 0}</span>
+        </div>
+        <div className={styles.statItem}>
+          <span className={styles.statLabel}>Hits ✓</span>
+          <span className={styles.statVal} style={{ color: 'var(--color-bull)' }}>{stats.hits ?? 0}</span>
+        </div>
+        <div className={styles.statItem}>
+          <span className={styles.statLabel}>Misses ✗</span>
+          <span className={styles.statVal} style={{ color: 'var(--color-bear)' }}>{stats.misses ?? 0}</span>
+        </div>
+        <div className={styles.statItem}>
+          <span className={styles.statLabel}>Live Acc</span>
+          <span className={styles.statVal} style={{ color: liveAcc != null ? (liveAcc >= 65 ? 'var(--color-bull)' : 'var(--color-warn)') : 'var(--color-text-muted)' }}>
+            {liveAcc != null ? `${liveAcc}%` : '—'}
+          </span>
+        </div>
+        <div className={styles.statItem}>
+          <span className={styles.statLabel}>Win Rate</span>
+          <span className={styles.statVal}>{s.winRate ?? '—'}%</span>
+        </div>
+        <div className={styles.statItem}>
+          <span className={styles.statLabel}>R:R</span>
+          <span className={styles.statVal}>1:{s.avgRR ?? '—'}</span>
+        </div>
       </div>
 
-      {/* ── Description ── */}
       <p className={styles.description}>{s.description}</p>
+      <div className={styles.tags}>{(s.tags ?? []).map(t => <span key={t} className={styles.tag}>{t}</span>)}</div>
 
-      {/* ── Tags ── */}
-      <div className={styles.tags}>
-        {s.tags.map(t => <span key={t} className={styles.tag}>{t}</span>)}
-      </div>
-
-      {/* ── Expand button ── */}
       <button className={styles.expandBtn} onClick={onToggle} aria-expanded={expanded}>
         {expanded ? '▲ Less detail' : '▼ Full strategy'}
       </button>
 
-      {/* ── Expanded detail ── */}
       {expanded && (
         <div className={styles.expandedContent}>
-          <div className={styles.expandSection}>
-            <h4 className={styles.expandTitle}>
-              Why it works
-              <InfoTooltip page={page} title="Strategy Logic"
-                content="The theoretical basis for why this strategy generates profitable signals." />
-            </h4>
-            <p className={styles.expandText}>{s.logic}</p>
-          </div>
-
-          <div className={styles.expandSection}>
-            <h4 className={styles.expandTitle}>Filters / Conditions</h4>
-            <div className={styles.filterList}>
-              {s.filters.map((f, i) => <span key={i} className={styles.filterChip}>{f}</span>)}
+          {s.logic && (
+            <div className={styles.expandSection}>
+              <h4 className={styles.expandTitle}>Why it works</h4>
+              <p className={styles.expandText}>{s.logic}</p>
             </div>
-          </div>
-
+          )}
+          {(s.filters ?? []).length > 0 && (
+            <div className={styles.expandSection}>
+              <h4 className={styles.expandTitle}>Entry Conditions</h4>
+              <div className={styles.filterList}>
+                {s.filters.map((f, i) => <span key={i} className={styles.filterChip}>{f}</span>)}
+              </div>
+            </div>
+          )}
           <div className={styles.expandGrid}>
-            <div className={styles.expandSection}>
-              <h4 className={styles.expandTitle}>
-                ✓ Best for
-                <InfoTooltip page={page} title="Best Market Conditions"
-                  content="Market conditions where this strategy performs best." />
-              </h4>
-              <p className={styles.expandText}>{s.bestFor}</p>
-            </div>
-            <div className={styles.expandSection}>
-              <h4 className={styles.expandTitle}>
-                ✗ Avoid when
-                <InfoTooltip page={page} title="When to Avoid"
-                  content="Conditions where this strategy tends to underperform or generate false signals." />
-              </h4>
-              <p className={styles.expandText}>{s.avoid}</p>
-            </div>
+            {s.bestFor && (
+              <div className={styles.expandSection}>
+                <h4 className={styles.expandTitle}>✓ Best for</h4>
+                <p className={styles.expandText}>{s.bestFor}</p>
+              </div>
+            )}
+            {s.avoid && (
+              <div className={styles.expandSection}>
+                <h4 className={styles.expandTitle}>✗ Avoid when</h4>
+                <p className={styles.expandText}>{s.avoid}</p>
+              </div>
+            )}
           </div>
-
           <div className={styles.expandSection}>
-            <h4 className={styles.expandTitle}>Prediction Parameters</h4>
+            <h4 className={styles.expandTitle}>Backtest Stats</h4>
             <div className={styles.paramGrid}>
-              {Object.entries(s.params).map(([k, v]) => (
-                <div key={k} className={styles.paramItem}>
-                  <span className={styles.paramKey}>{k}</span>
-                  <span className={styles.paramVal}>{String(v)}</span>
-                </div>
-              ))}
+              <div className={styles.paramItem}><span className={styles.paramKey}>Accuracy</span><span className={styles.paramVal}>{s.accuracy}%</span></div>
+              <div className={styles.paramItem}><span className={styles.paramKey}>Max DD</span><span className={styles.paramVal}>{s.maxDrawdown}%</span></div>
+              <div className={styles.paramItem}><span className={styles.paramKey}>Sharpe</span><span className={styles.paramVal}>{s.sharpe}</span></div>
+              <div className={styles.paramItem}><span className={styles.paramKey}>Years</span><span className={styles.paramVal}>{s.backtestYears}y</span></div>
+              <div className={styles.paramItem}><span className={styles.paramKey}>Risk</span><span className={styles.paramVal}>{s.risk}</span></div>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── Apply button ── */}
-      <button className={styles.applyBtn} onClick={onApply} type="button">
-        ⚡ Apply to Predictions
-        <InfoTooltip page={page} title="Apply Strategy"
-          content="Opens the Predictions page with this strategy's parameters pre-loaded. You can still adjust them before generating signals." />
-      </button>
+      <div className={styles.cardActions}>
+        <button className={styles.applyBtn} onClick={onApply} type="button">⚡ Apply to Predictions</button>
+        {extraAction}
+      </div>
     </article>
   )
 }
 
-function QuickStat({ label, value, color, info, page }) {
-  const colorMap = { bull: 'var(--color-bull)', bear: 'var(--color-bear)', warn: 'var(--color-warn)', neutral: 'var(--color-text-secondary)' }
+// ── Shared: FilterGroup ───────────────────────────────────────────────────────
+
+function FilterGroup({ label, value, options, onChange }) {
   return (
-    <div className={styles.quickStat}>
-      <span className={styles.quickStatLabel}>
-        {label}
-        {info && <InfoTooltip page={page} title={label} content={info} />}
-      </span>
-      <span className={styles.quickStatValue} style={{ color: colorMap[color] ?? colorMap.neutral }}>
-        {value}
-      </span>
+    <div className={styles.filterGroup}>
+      <span className={styles.filterLabel}>{label}</span>
+      <div className={styles.filterBtns}>
+        {options.map(opt => (
+          <button key={opt} type="button"
+            className={`${styles.filterBtn} ${value === opt ? styles.filterBtnActive : ''}`}
+            onClick={() => onChange(opt)}>{opt}</button>
+        ))}
+      </div>
     </div>
   )
 }

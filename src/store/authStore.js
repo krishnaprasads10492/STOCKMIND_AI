@@ -1,6 +1,8 @@
 /**
  * authStore — global auth state via Zustand.
- * Session token stored in sessionStorage (cleared on tab/browser close).
+ * Session token stored in localStorage — survives tab/browser close AND
+ * server restarts (backend persists sessions to encrypted disk).
+ * Token is cleared only on explicit logout or when the server rejects it.
  */
 
 import { create } from 'zustand'
@@ -8,11 +10,11 @@ import { create } from 'zustand'
 const TOKEN_KEY = 'sm_session'
 const USER_KEY  = 'sm_user'
 
-function loadFromSession() {
+function loadFromStorage() {
   try {
     return {
-      token: sessionStorage.getItem(TOKEN_KEY) ?? null,
-      user:  JSON.parse(sessionStorage.getItem(USER_KEY) ?? 'null'),
+      token: localStorage.getItem(TOKEN_KEY) ?? null,
+      user:  JSON.parse(localStorage.getItem(USER_KEY) ?? 'null'),
     }
   } catch {
     return { token: null, user: null }
@@ -20,7 +22,7 @@ function loadFromSession() {
 }
 
 export const useAuthStore = create((set) => {
-  const { token, user } = loadFromSession()
+  const { token, user } = loadFromStorage()
 
   return {
     token,
@@ -33,21 +35,21 @@ export const useAuthStore = create((set) => {
     },
 
     setSession(sessionToken, userData) {
-      sessionStorage.setItem(TOKEN_KEY, sessionToken)
-      sessionStorage.setItem(USER_KEY, JSON.stringify(userData))
+      localStorage.setItem(TOKEN_KEY, sessionToken)
+      localStorage.setItem(USER_KEY, JSON.stringify(userData))
       set({ token: sessionToken, user: userData, isAuthenticated: true })
     },
 
     clearSession() {
-      sessionStorage.removeItem(TOKEN_KEY)
-      sessionStorage.removeItem(USER_KEY)
+      localStorage.removeItem(TOKEN_KEY)
+      localStorage.removeItem(USER_KEY)
       set({ token: null, user: null, isAuthenticated: false })
     },
 
     updatePreferences(prefs) {
       set(state => {
         const updated = { ...state.user, preferences: { ...state.user?.preferences, ...prefs } }
-        sessionStorage.setItem(USER_KEY, JSON.stringify(updated))
+        localStorage.setItem(USER_KEY, JSON.stringify(updated))
         return { user: updated }
       })
     },
@@ -55,7 +57,7 @@ export const useAuthStore = create((set) => {
     clearMustChangePassword() {
       set(state => {
         const updated = { ...state.user, mustChangePassword: false }
-        sessionStorage.setItem(USER_KEY, JSON.stringify(updated))
+        localStorage.setItem(USER_KEY, JSON.stringify(updated))
         return { user: updated }
       })
     },

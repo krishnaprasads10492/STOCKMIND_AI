@@ -343,10 +343,11 @@ function CategoryPanel({ category, schema, config, token, userOverride, onSaved 
 // ── Provider Card ─────────────────────────────────────────────────────────────
 
 function ProviderCard({ provider, schema, enabled, testState, onToggle, onFieldChange, onTest, onDelete }) {
-  const [expanded, setExpanded] = useState(false)
+  const [expanded,    setExpanded]    = useState(false)
   const [showSecrets, setShowSecrets] = useState({})
+  const [showInfo,    setShowInfo]    = useState(false)
 
-  const hasFields = (schema.fields ?? []).length > 0
+  const hasFields  = (schema.fields ?? []).length > 0
   const testResult = testState?.result
 
   return (
@@ -368,7 +369,7 @@ function ProviderCard({ provider, schema, enabled, testState, onToggle, onFieldC
           <div className={styles.providerInfo}>
             <span className={styles.providerName}>{provider.name}</span>
             <div className={styles.providerMeta}>
-              {schema.free && <span className={styles.freeBadge}>Free</span>}
+              {schema.free && <span className={styles.freeBadge}>Free tier</span>}
               {schema.authType === 'none' && <span className={styles.noAuthBadge}>No key needed</span>}
               {enabled && <span className={styles.activeBadge}>● Active</span>}
             </div>
@@ -376,6 +377,16 @@ function ProviderCard({ provider, schema, enabled, testState, onToggle, onFieldC
         </div>
 
         <div className={styles.providerRight}>
+          {/* Info tooltip button */}
+          {schema.info && (
+            <button
+              type="button"
+              className={`${styles.infoBtn} ${showInfo ? styles.infoBtnActive : ''}`}
+              onClick={() => setShowInfo(s => !s)}
+              aria-label="Provider information"
+              title="About this provider"
+            >ⓘ</button>
+          )}
           {/* Test button */}
           {enabled && (
             <button
@@ -384,14 +395,21 @@ function ProviderCard({ provider, schema, enabled, testState, onToggle, onFieldC
               disabled={testState?.loading}
               title="Test connection"
             >
-              {testState?.loading ? '⏳' : testResult?.ok === true ? '✓' : testResult?.ok === false ? '✗' : '⚡ Test'}
+              {testState?.loading ? '⏳' : testResult?.ok === true ? '✓ OK' : testResult?.ok === false ? '✗ Fail' : '⚡ Test'}
             </button>
           )}
           {/* Docs link */}
           {schema.docs && (
             <a href={schema.docs} target="_blank" rel="noopener noreferrer"
               className={styles.docsLink} title="Documentation">
-              📖
+              📖 Docs
+            </a>
+          )}
+          {/* Signup link */}
+          {schema.signup && (
+            <a href={schema.signup} target="_blank" rel="noopener noreferrer"
+              className={styles.signupLink} title="Sign up / Get API key">
+              🔑 Get Key
             </a>
           )}
           {/* Expand/collapse */}
@@ -407,6 +425,34 @@ function ProviderCard({ provider, schema, enabled, testState, onToggle, onFieldC
         </div>
       </div>
 
+      {/* Info panel */}
+      {showInfo && schema.info && (
+        <div className={styles.infoPanel}>
+          <p className={styles.infoPanelText}>{schema.info}</p>
+          {schema.models?.length > 0 && (
+            <div className={styles.modelList}>
+              <span className={styles.modelListLabel}>Available models:</span>
+              <div className={styles.modelChips}>
+                {schema.models.map(m => (
+                  <button
+                    key={m}
+                    type="button"
+                    className={styles.modelChip}
+                    onClick={() => { onFieldChange('defaultModel', m); setExpanded(true) }}
+                    title={`Use ${m}`}
+                  >{m}</button>
+                ))}
+              </div>
+            </div>
+          )}
+          {schema.apiKeys && (
+            <a href={schema.apiKeys} target="_blank" rel="noopener noreferrer" className={styles.getKeyLink}>
+              → Get your API key at {schema.apiKeys.replace('https://', '')}
+            </a>
+          )}
+        </div>
+      )}
+
       {/* Test result */}
       {testResult && (
         <div className={`${styles.testResult} ${testResult.ok ? styles.testResultOk : styles.testResultFail}`}>
@@ -421,8 +467,9 @@ function ProviderCard({ provider, schema, enabled, testState, onToggle, onFieldC
       {expanded && hasFields && (
         <div className={styles.providerFields}>
           {(schema.fields ?? []).map(field => {
-            const isSecret = ['apiKey','apiSecret','password','botToken','secret','uri'].includes(field)
+            const isSecret  = ['apiKey','apiSecret','password','botToken','secret','uri'].includes(field)
             const isVisible = showSecrets[field]
+            const hint      = schema.fieldInfo?.[field]
             return (
               <div key={field} className={styles.fieldRow}>
                 <label className={styles.fieldLabel} htmlFor={`${provider.id}-${field}`}>
@@ -453,6 +500,7 @@ function ProviderCard({ provider, schema, enabled, testState, onToggle, onFieldC
                     </button>
                   )}
                 </div>
+                {hint && <p className={styles.fieldHint}>ⓘ {hint}</p>}
               </div>
             )
           })}
@@ -466,23 +514,24 @@ function ProviderCard({ provider, schema, enabled, testState, onToggle, onFieldC
 
 function _fieldLabel(field) {
   const labels = {
-    apiKey:      'API Key',
-    apiSecret:   'API Secret',
-    password:    'Password',
-    botToken:    'Bot Token',
-    chatId:      'Chat ID',
-    secret:      'Webhook Secret',
-    uri:         'Connection URI',
-    baseUrl:     'Base URL',
-    defaultModel:'Default Model',
-    host:        'Host',
-    port:        'Port',
-    database:    'Database Name',
-    user:        'Username',
-    path:        'File Path',
-    from:        'From Email',
-    url:         'Webhook URL',
-    redirectUrl: 'Redirect URL',
+    apiKey:       'API Key',
+    apiSecret:    'API Secret',
+    orgId:        'Organization ID',
+    password:     'Password',
+    botToken:     'Bot Token',
+    chatId:       'Chat ID',
+    secret:       'Webhook Secret',
+    uri:          'Connection URI',
+    baseUrl:      'Base URL',
+    defaultModel: 'Default Model',
+    host:         'Host',
+    port:         'Port',
+    database:     'Database Name',
+    user:         'Username',
+    path:         'File Path',
+    from:         'From Email',
+    url:          'Webhook URL',
+    redirectUrl:  'Redirect URL',
   }
   return labels[field] ?? field.replace(/([A-Z])/g, ' $1').trim()
 }

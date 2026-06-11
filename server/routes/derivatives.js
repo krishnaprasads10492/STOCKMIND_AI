@@ -372,7 +372,18 @@ router.post('/matrix', requireAuth, (req, res) => {
   if (!basePrice || basePrice <= 0) return res.status(400).json({ error: 'basePrice required' })
 
   const S = Number(basePrice)
-  const K = Math.round(S / 50) * 50  // round to nearest 50 (NSE strike step)
+  // Use correct strike step per symbol
+  const STRIKE_STEPS_MAP = {
+    NIFTY: 50, BANKNIFTY: 100, FINNIFTY: 50, MIDCPNIFTY: 25,
+    SENSEX: 100, NIFTY50: 50, default: 50,
+  }
+  const LOT_SIZES_MAP = {
+    NIFTY: 25, BANKNIFTY: 15, FINNIFTY: 40, MIDCPNIFTY: 75,
+    SENSEX: 10, NIFTY50: 25, default: 25,
+  }
+  const symKey = (symbol ?? '').replace(/\d+/g, '').toUpperCase()
+  const strikeStep = STRIKE_STEPS_MAP[symKey] ?? STRIKE_STEPS_MAP.default
+  const K = Math.round(S / strikeStep) * strikeStep  // ATM strike
 
   // Time to expiry in years
   let T = 30 / 365  // default 30 days
@@ -383,7 +394,7 @@ router.post('/matrix', requireAuth, (req, res) => {
 
   const r     = 0.065   // RBI repo rate ~6.5%
   const sigma = 0.18    // default IV ~18% for NSE
-  const lotSize = 50    // default NIFTY lot size
+  const lotSize = LOT_SIZES_MAP[symKey] ?? LOT_SIZES_MAP.default
 
   const recommended = VIEW_STRATEGIES[marketView] ?? []
 

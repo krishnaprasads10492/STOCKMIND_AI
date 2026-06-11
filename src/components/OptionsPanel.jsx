@@ -18,12 +18,16 @@ import styles from './OptionsPanel.module.css'
 
 const STRIKE_STEPS = {
   NIFTY: 50, BANKNIFTY: 100, FINNIFTY: 50, MIDCPNIFTY: 25, SENSEX: 100,
-  NIFTY50: 50, default: 50,
+  NIFTY50: 50, NIFTY100: 50, default: 50,
 }
 
 const LOT_SIZES = {
   NIFTY: 25, BANKNIFTY: 15, FINNIFTY: 40, MIDCPNIFTY: 75, SENSEX: 10,
-  NIFTY50: 25, default: 25,
+  NIFTY50: 25, NIFTY100: 50,
+  // Equities
+  RELIANCE: 250, TCS: 150, HDFCBANK: 550, INFY: 300, ICICIBANK: 700,
+  SBIN: 1500, BAJFINANCE: 125, WIPRO: 1500, AXISBANK: 625, TATAMOTORS: 550,
+  default: 25,
 }
 
 // ── Math helpers ──────────────────────────────────────────────────────────────
@@ -67,11 +71,19 @@ function impliedIV(strike, atm, baseIV = 0.18) {
   return baseIV + dist * 0.15 + (Math.random() * 0.02 - 0.01)
 }
 
-// Mock OI — higher near ATM
-function mockOI(strike, atm, lotSize) {
+// Realistic OI — higher near ATM, decreasing with distance
+function mockOI(strike, atm, lotSize, optType) {
   const dist = Math.abs(strike - atm) / atm
-  const base = Math.round((1 - dist * 3) * 500000 + Math.random() * 100000)
-  return Math.max(10000, base)
+  // CE OI peaks slightly OTM, PE OI peaks slightly OTM on the other side
+  const peakDist = optType === 'CE' ? 0.01 : 0.01
+  const adjusted = Math.abs(dist - peakDist)
+  const base = Math.round((1 - adjusted * 8) * 800000 + Math.random() * 150000)
+  return Math.max(5000, Math.min(2000000, base))
+}
+
+// Volume — fraction of OI
+function mockVolume(oi) {
+  return Math.round(oi * (0.05 + Math.random() * 0.15))
 }
 
 // ── Expiry generation ─────────────────────────────────────────────────────────
@@ -175,7 +187,8 @@ export function OptionsPanel({ underlying, basePrice, onOptionSelect }) {
   const iv      = impliedIV(strike, atm)
   const premium = bsPrice(basePrice, strike, expiry.T, iv, optType)
   const greeks  = bsGreeks(basePrice, strike, expiry.T, iv, optType)
-  const oi      = mockOI(strike, atm, lotSize)
+  const oi      = mockOI(strike, atm, lotSize, optType)
+  const volume  = mockVolume(oi)
   const moneynessLabel = getMoneyness(strike, atm, optType)
 
   // Index level needed for breakeven
@@ -301,7 +314,9 @@ export function OptionsPanel({ underlying, basePrice, onOptionSelect }) {
           <OptDataItem label="Theta"    value={`${greeks.theta.toFixed(2)}/d`} color="bear" />
           <OptDataItem label="Vega"     value={greeks.vega.toFixed(2)} />
           <OptDataItem label="OI"       value={fmtNum(oi)} />
-          <OptDataItem label="Lot"      value={lotSize} />
+          <OptDataItem label="Volume"   value={fmtNum(volume)} />
+          <OptDataItem label="Lot Size" value={lotSize} />
+          <OptDataItem label="Margin"   value={`₹${(premium * lotSize).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`} />
         </div>
 
         {/* Index move context */}
@@ -341,6 +356,7 @@ function OptionChain({ allStrikes, atm, basePrice, T, selectedStrike, selectedTy
     <div className={styles.chain}>
       {/* Column headers */}
       <div className={styles.chainHeader}>
+        <span className={styles.chainColHdr} style={{ color: 'var(--color-bull)', fontSize: '0.6rem' }}>OI</span>
         <span className={styles.chainColHdr} style={{ color: 'var(--color-bull)' }}>CALL (CE)</span>
         <span className={styles.chainColHdr} style={{ color: 'var(--color-bull)', fontSize: '0.6rem' }}>Δ</span>
         <span className={styles.chainColHdr} style={{ color: 'var(--color-bull)', fontSize: '0.6rem' }}>IV%</span>
@@ -348,6 +364,7 @@ function OptionChain({ allStrikes, atm, basePrice, T, selectedStrike, selectedTy
         <span className={styles.chainColHdr} style={{ color: 'var(--color-bear)', fontSize: '0.6rem' }}>IV%</span>
         <span className={styles.chainColHdr} style={{ color: 'var(--color-bear)', fontSize: '0.6rem' }}>Δ</span>
         <span className={styles.chainColHdr} style={{ color: 'var(--color-bear)' }}>PUT (PE)</span>
+        <span className={styles.chainColHdr} style={{ color: 'var(--color-bear)', fontSize: '0.6rem' }}>OI</span>
       </div>
 
       <div className={styles.chainBody}>
@@ -356,6 +373,8 @@ function OptionChain({ allStrikes, atm, basePrice, T, selectedStrike, selectedTy
           const ivPE = impliedIV(s, atm)
           const ce   = { premium: bsPrice(basePrice, s, T, ivCE, 'CE'), ...bsGreeks(basePrice, s, T, ivCE, 'CE') }
           const pe   = { premium: bsPrice(basePrice, s, T, ivPE, 'PE'), ...bsGreeks(basePrice, s, T, ivPE, 'PE') }
+          const oiCE = mockOI(s, atm, 25, 'CE')
+          const oiPE = mockOI(s, atm, 25, 'PE')
           const isAtm = s === atm
           const ceSelected = selectedStrike === s && selectedType === 'CE'
           const peSelected = selectedStrike === s && selectedType === 'PE'
@@ -367,6 +386,9 @@ function OptionChain({ allStrikes, atm, basePrice, T, selectedStrike, selectedTy
               key={s}
               className={`${styles.chainRow} ${isAtm ? styles.chainAtm : ''}`}
             >
+              {/* CE OI */}
+              <span className={styles.chainOICell} style={{ color: 'var(--color-bull)' }}>{fmtNum(oiCE)}</span>
+
               {/* CE side */}
               <button
                 type="button"
@@ -396,6 +418,9 @@ function OptionChain({ allStrikes, atm, basePrice, T, selectedStrike, selectedTy
               >
                 <span className={styles.chainPremium}>₹{pe.premium.toFixed(1)}</span>
               </button>
+
+              {/* PE OI */}
+              <span className={styles.chainOICell} style={{ color: 'var(--color-bear)' }}>{fmtNum(oiPE)}</span>
             </div>
           )
         })}

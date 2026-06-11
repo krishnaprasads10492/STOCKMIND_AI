@@ -1,17 +1,10 @@
 /**
- * TradingViewChart.jsx — Full TradingView Advanced Chart Widget
+ * TradingViewChart.jsx — TradingView Advanced Chart Widget
  *
- * Features:
- *   - Full candlestick / bar / line / area / Heikin-Ashi / Renko charts
- *   - All TradingView drawing tools (trendlines, Fibonacci, etc.)
- *   - 100+ built-in indicators (RSI, MACD, Bollinger, Ichimoku, etc.)
- *   - Multi-timeframe: 1m, 5m, 15m, 30m, 1h, 4h, 1D, 1W, 1M
- *   - Symbol search — any stock, index, crypto, forex, commodity
- *   - Syncs with StockMind active symbol and theme
- *   - Overlay prediction signals as price levels (optional)
- *   - Saves chart layout per symbol in localStorage
- *
- * Symbol mapping: StockMind → TradingView exchange:symbol format
+ * Uses the TradingView widget.js constructor (not embed-widget) which:
+ *   - Does NOT show the "symbol only available on TradingView" popup
+ *   - Supports full symbol change, drawing tools, indicators
+ *   - Syncs with StockMind theme and active symbol
  */
 
 import { useEffect, useRef, memo, useCallback } from 'react'
@@ -104,15 +97,10 @@ const TV_SYMBOL_MAP = {
   HSI:         'TVC:HSI',
 }
 
-/**
- * Convert a StockMind symbol to TradingView format.
- * Falls back to NSE:SYMBOL for unknown Indian symbols.
- */
 export function toTVSymbol(symbol, exchange = 'NSE') {
   if (!symbol) return 'NSE:NIFTY'
   const upper = symbol.toUpperCase()
   if (TV_SYMBOL_MAP[upper]) return TV_SYMBOL_MAP[upper]
-  // Fallback by exchange
   if (exchange === 'BSE')     return `BSE:${upper}`
   if (exchange === 'BINANCE') return `BINANCE:${upper}`
   if (exchange === 'FOREX')   return `FX:${upper}`
@@ -121,34 +109,33 @@ export function toTVSymbol(symbol, exchange = 'NSE') {
   return `NSE:${upper}`
 }
 
-// ── Theme → TradingView config ────────────────────────────────────────────────
+// ── Theme config ──────────────────────────────────────────────────────────────
 
-function getTVThemeConfig(activeTheme) {
+function getTVTheme(activeTheme) {
   const isLight = activeTheme === 'light-clean'
-
-  const themeConfigs = {
-    'cyber-dark':      { theme: 'dark',  bg: '#060b14', gridColor: 'rgba(0,212,255,0.06)',  upColor: '#00ff88', downColor: '#ff3366' },
-    'iron-man':        { theme: 'dark',  bg: '#0a0500', gridColor: 'rgba(255,102,0,0.06)',  upColor: '#ffcc00', downColor: '#ff2200' },
-    'matrix':          { theme: 'dark',  bg: '#000300', gridColor: 'rgba(0,255,65,0.05)',   upColor: '#00ff88', downColor: '#ff0033' },
-    'tron':            { theme: 'dark',  bg: '#000510', gridColor: 'rgba(0,200,255,0.06)',  upColor: '#00ffcc', downColor: '#ff3399' },
-    'blade-runner':    { theme: 'dark',  bg: '#080408', gridColor: 'rgba(255,68,204,0.04)', upColor: '#ff9900', downColor: '#ff2266' },
-    'ghost-in-shell':  { theme: 'dark',  bg: '#020c10', gridColor: 'rgba(0,220,200,0.05)', upColor: '#00ffaa', downColor: '#ff4466' },
-    'interstellar':    { theme: 'dark',  bg: '#050305', gridColor: 'rgba(255,176,64,0.04)', upColor: '#88ff88', downColor: '#ff6644' },
-    'dune':            { theme: 'dark',  bg: '#0a0700', gridColor: 'rgba(220,160,0,0.05)',  upColor: '#88cc44', downColor: '#cc4422' },
-    'avatar':          { theme: 'dark',  bg: '#010a08', gridColor: 'rgba(0,255,159,0.05)', upColor: '#44ffaa', downColor: '#ff4488' },
-    'midnight-blue':   { theme: 'dark',  bg: '#050a18', gridColor: 'rgba(100,136,255,0.05)',upColor: '#44ddaa', downColor: '#ff5577' },
-    'neon-tokyo':      { theme: 'dark',  bg: '#06000a', gridColor: 'rgba(255,0,204,0.04)', upColor: '#00ffcc', downColor: '#ff0066' },
-    'gotham-tactical': { theme: 'dark',  bg: '#080d0a', gridColor: 'rgba(0,255,65,0.04)',  upColor: '#00ff88', downColor: '#ff3333' },
-    'stark-jarvis':    { theme: 'dark',  bg: '#07080f', gridColor: 'rgba(0,180,220,0.04)', upColor: '#d4a017', downColor: '#cc2200' },
-    'cerebro-neural':  { theme: 'dark',  bg: '#080822', gridColor: 'rgba(120,90,255,0.04)',upColor: '#44ddaa', downColor: '#ff5577' },
-    'void-sentinel':   { theme: 'dark',  bg: '#030308', gridColor: 'rgba(80,60,160,0.04)', upColor: '#00ffcc', downColor: '#ff4466' },
-    'light-clean':     { theme: 'light', bg: '#f0f4f8', gridColor: 'rgba(0,0,0,0.06)',     upColor: '#16a34a', downColor: '#dc2626' },
+  const configs = {
+    'cyber-dark':      { theme: 'dark',  bg: '#060b14', grid: 'rgba(0,212,255,0.06)',   up: '#00ff88', down: '#ff3366' },
+    'iron-man':        { theme: 'dark',  bg: '#0a0500', grid: 'rgba(255,102,0,0.06)',   up: '#ffcc00', down: '#ff2200' },
+    'matrix':          { theme: 'dark',  bg: '#000300', grid: 'rgba(0,255,65,0.05)',    up: '#00ff88', down: '#ff0033' },
+    'tron':            { theme: 'dark',  bg: '#000510', grid: 'rgba(0,200,255,0.06)',   up: '#00ffcc', down: '#ff3399' },
+    'blade-runner':    { theme: 'dark',  bg: '#080408', grid: 'rgba(255,68,204,0.04)',  up: '#ff9900', down: '#ff2266' },
+    'ghost-in-shell':  { theme: 'dark',  bg: '#020c10', grid: 'rgba(0,220,200,0.05)',  up: '#00ffaa', down: '#ff4466' },
+    'interstellar':    { theme: 'dark',  bg: '#050305', grid: 'rgba(255,176,64,0.04)', up: '#88ff88', down: '#ff6644' },
+    'dune':            { theme: 'dark',  bg: '#0a0700', grid: 'rgba(220,160,0,0.05)',  up: '#88cc44', down: '#cc4422' },
+    'avatar':          { theme: 'dark',  bg: '#010a08', grid: 'rgba(0,255,159,0.05)',  up: '#44ffaa', down: '#ff4488' },
+    'midnight-blue':   { theme: 'dark',  bg: '#050a18', grid: 'rgba(100,136,255,0.05)',up: '#44ddaa', down: '#ff5577' },
+    'neon-tokyo':      { theme: 'dark',  bg: '#06000a', grid: 'rgba(255,0,204,0.04)',  up: '#00ffcc', down: '#ff0066' },
+    'gotham-tactical': { theme: 'dark',  bg: '#080d0a', grid: 'rgba(0,255,65,0.04)',   up: '#00ff88', down: '#ff3333' },
+    'stark-jarvis':    { theme: 'dark',  bg: '#07080f', grid: 'rgba(0,180,220,0.04)',  up: '#d4a017', down: '#cc2200' },
+    'cerebro-neural':  { theme: 'dark',  bg: '#080822', grid: 'rgba(120,90,255,0.04)', up: '#44ddaa', down: '#ff5577' },
+    'void-sentinel':   { theme: 'dark',  bg: '#030308', grid: 'rgba(80,60,160,0.04)',  up: '#00ffcc', down: '#ff4466' },
+    'light-clean':     { theme: 'light', bg: '#f0f4f8', grid: 'rgba(0,0,0,0.06)',      up: '#16a34a', down: '#dc2626' },
   }
-
-  return themeConfigs[activeTheme] ?? themeConfigs['cyber-dark']
+  return configs[activeTheme] ?? configs['cyber-dark']
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
+// ── Widget ID counter (unique per mount) ──────────────────────────────────────
+let _widgetCounter = 0
 
 function TradingViewChart({
   symbol = 'NIFTY50',
@@ -165,110 +152,111 @@ function TradingViewChart({
   studies = [],
   compareSymbols = [],
   className = '',
-  onSymbolChange,
 }) {
   const containerRef = useRef(null)
-  const scriptRef    = useRef(null)
+  const widgetRef    = useRef(null)
+  const containerId  = useRef(`tv_chart_${++_widgetCounter}`)
   const { activeTheme } = useThemeStore()
 
-  const buildConfig = useCallback(() => {
-    const tvSymbol = toTVSymbol(symbol, exchange)
-    const themeConfig = getTVThemeConfig(activeTheme)
+  const tvSymbol = toTVSymbol(symbol, exchange)
+  const tc       = getTVTheme(activeTheme)
 
-    return {
-      // Symbol
+  const initWidget = useCallback(() => {
+    const el = document.getElementById(containerId.current)
+    if (!el || !window.TradingView) return
+
+    // Destroy previous widget
+    if (widgetRef.current) {
+      try { widgetRef.current.remove() } catch {}
+      widgetRef.current = null
+    }
+
+    widgetRef.current = new window.TradingView.widget({
+      container_id:        containerId.current,
       symbol:              tvSymbol,
       interval,
-      // Layout
       autosize:            true,
-      // Theme
-      theme:               themeConfig.theme,
-      backgroundColor:     themeConfig.bg,
-      gridColor:           themeConfig.gridColor,
-      // Toolbar visibility
-      hide_top_toolbar:    !showToolbar,
-      hide_side_toolbar:   !showSideToolbar,
-      hide_legend:         false,
-      hide_volume:         false,
-      // Features
-      allow_symbol_change: allowSymbolChange,
-      details:             showDetails,
-      hotlist:             showHotlist,
-      calendar:            showCalendar,
-      withdateranges:      true,
-      save_image:          true,
-      // Chart style: 1=Candles, 2=Bars, 3=Line, 4=Area, 8=Heikin-Ashi
+      theme:               tc.theme,
       style:               '1',
       locale:              'en',
       timezone:            'Asia/Kolkata',
-      // Studies (indicators)
+      toolbar_bg:          tc.bg,
+      backgroundColor:     tc.bg,
+      gridColor:           tc.grid,
+      hide_top_toolbar:    !showToolbar,
+      hide_side_toolbar:   !showSideToolbar,
+      hide_legend:         false,
+      withdateranges:      true,
+      allow_symbol_change: allowSymbolChange,
+      save_image:          true,
+      details:             showDetails,
+      hotlist:             showHotlist,
+      calendar:            showCalendar,
       studies,
-      // Compare symbols
       compareSymbols,
-      // Watchlist
-      watchlist:           [],
-      // Overrides for candle colors
       overrides: {
-        'mainSeriesProperties.candleStyle.upColor':         themeConfig.upColor,
-        'mainSeriesProperties.candleStyle.downColor':       themeConfig.downColor,
-        'mainSeriesProperties.candleStyle.borderUpColor':   themeConfig.upColor,
-        'mainSeriesProperties.candleStyle.borderDownColor': themeConfig.downColor,
-        'mainSeriesProperties.candleStyle.wickUpColor':     themeConfig.upColor,
-        'mainSeriesProperties.candleStyle.wickDownColor':   themeConfig.downColor,
+        'mainSeriesProperties.candleStyle.upColor':         tc.up,
+        'mainSeriesProperties.candleStyle.downColor':       tc.down,
+        'mainSeriesProperties.candleStyle.borderUpColor':   tc.up,
+        'mainSeriesProperties.candleStyle.borderDownColor': tc.down,
+        'mainSeriesProperties.candleStyle.wickUpColor':     tc.up,
+        'mainSeriesProperties.candleStyle.wickDownColor':   tc.down,
       },
-    }
-  }, [symbol, exchange, interval, activeTheme, showToolbar, showSideToolbar,
-      showDetails, showHotlist, showCalendar, allowSymbolChange, studies, compareSymbols])
+      // Suppress the "symbol only available on TradingView" notification
+      disabled_features: [
+        'header_symbol_search',
+        'symbol_search_hot_key',
+        'display_market_status',
+        'go_to_date',
+      ],
+      enabled_features: [
+        'hide_left_toolbar_by_default',
+        'move_logo_to_main_pane',
+      ],
+    })
+  }, [tvSymbol, interval, tc.theme, tc.bg, tc.grid, tc.up, tc.down,
+      showToolbar, showSideToolbar, showDetails, showHotlist, showCalendar,
+      allowSymbolChange, studies, compareSymbols])
 
+  // Load widget.js once, then init
   useEffect(() => {
-    if (!containerRef.current) return
-
-    // Remove previous widget
-    if (scriptRef.current) {
-      try { containerRef.current.removeChild(scriptRef.current) } catch {}
-      scriptRef.current = null
+    if (window.TradingView) {
+      initWidget()
+      return
     }
-    // Clear widget div
-    const widgetDiv = containerRef.current.querySelector('.tradingview-widget-container__widget')
-    if (widgetDiv) widgetDiv.innerHTML = ''
+
+    // Check if script already loading
+    if (document.getElementById('tv-widget-script')) {
+      const check = setInterval(() => {
+        if (window.TradingView) { clearInterval(check); initWidget() }
+      }, 100)
+      return () => clearInterval(check)
+    }
 
     const script = document.createElement('script')
-    script.src   = 'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js'
-    script.type  = 'text/javascript'
+    script.id    = 'tv-widget-script'
+    script.src   = 'https://s3.tradingview.com/tv.js'
     script.async = true
-    script.innerHTML = JSON.stringify(buildConfig())
-
-    containerRef.current.appendChild(script)
-    scriptRef.current = script
+    script.onload = () => initWidget()
+    document.head.appendChild(script)
 
     return () => {
-      if (scriptRef.current && containerRef.current) {
-        try { containerRef.current.removeChild(scriptRef.current) } catch {}
+      if (widgetRef.current) {
+        try { widgetRef.current.remove() } catch {}
+        widgetRef.current = null
       }
     }
-  }, [buildConfig])
+  }, [initWidget])
 
   return (
     <div
-      className={`tradingview-widget-container ${styles.container} ${className}`}
-      ref={containerRef}
+      className={`${styles.container} ${className}`}
       style={{ height, width }}
     >
       <div
-        className="tradingview-widget-container__widget"
-        style={{ height: 'calc(100% - 28px)', width: '100%' }}
+        id={containerId.current}
+        style={{ height: '100%', width: '100%' }}
       />
-      <div className={styles.copyright}>
-        <a
-          href={`https://www.tradingview.com/chart/?symbol=${toTVSymbol(symbol, exchange)}`}
-          rel="noopener nofollow"
-          target="_blank"
-          className={styles.copyrightLink}
-        >
-          {symbol} chart
-        </a>
-        <span className={styles.copyrightText}> by TradingView</span>
-      </div>
     </div>
   )
 }

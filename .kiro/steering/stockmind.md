@@ -108,3 +108,102 @@ Each module is a self-contained page with its own data service and prediction en
 ## Accuracy gate
 Prediction mechanism is only stable when 3-year backtest shows 75–97% accuracy.
 If below threshold → auto-optimisation pipeline triggered → human approval required before promotion.
+
+
+---
+
+## AGI Architecture — Implemented Modules (reference for session continuity)
+
+### Python AI Backend (`ai_backend/engine/`)
+| Module | Purpose |
+|--------|---------|
+| `agi_engine.py` | Regime memory, causal filter, transfer learning, multi-horizon, anomaly detection |
+| `agi_envelope.py` | 5-layer signal envelope (Exterior→Shield→Main→Core→Sync) |
+| `perception_engine.py` | Ingestion vectorization, Vector Ledger, Episodic Memory (Blueprint Layer II-A + III) |
+| `inference_scale_quantizer.py` | Ps, Calloc, Ptrap formulas, ARC gauge, API circuit breaker (Blueprint Layer II) |
+| `multi_horizon_wave.py` | 4h intraday + 7d swing + macro cycle wave projections (Cognitive Nexus Engine) |
+| `friday_nexus.py` | ToT-MAC debate, Alpha Space MCTS, GAM-WAR, A* optimizer (Schema V5.00) |
+| `jarvis_x_core.py` | JARVIS-X Super-AGI: LPM, Attack Maze, ASI consciousness, DIO router |
+| `jarvis_agent.py` | ReAct loop, multi-agent orchestrator |
+| `jarvis_brain.py` | Cloud AI routing, knowledge base |
+| `unified_data_hub.py` | Zero-Trust Fusion Gate, NLP sentiment, macro integrator |
+
+### AGI Mathematical Protocols
+- **Ps** = `max(0, sum(w * [1 - P(Drawdown) * gamma]))`
+- **Calloc** = `min(Cmax, Ccase * exp(alpha*H + beta*(sigma²/theta)))`
+- **Ptrap** = `1 / (1 + exp(-(λ1*V + λ2*I - γ)))`
+- **A\*** = `argmax_A [ sum(gamma^t * E[Rt(A)] * (1 - Ptrap,t)) ]`
+- Subject to: **Ps >= Phi_min** AND **Tokens(A) <= Calloc**
+
+### Key AGI API Routes (all under /api/jarvis/)
+- `GET  /blueprint-status` — Full 3-layer architecture status
+- `POST /multi-horizon` — Wave projections (4h / 7d / macro)
+- `POST /isq-quantize` — Ps + Calloc + Ptrap computation
+- `GET  /arc-gauge` — Token burn tracker
+- `GET  /circuit-breaker` — Read-only lock status
+- `POST /friday-nexus/optimize` — Full A* optimization pass
+- `POST /friday-nexus/debate` — ToT-MAC multi-agent debate
+- `POST /friday-nexus/mcts-search` — Alpha Space MCTS
+- `POST /friday-nexus/gamwar-detect` — Live attack detection
+- `GET  /jarvis-x/status` — JARVIS-X Super-AGI full status
+- `GET  /jarvis-x/lpm` — Loss Prevention Module
+
+---
+
+## Dependency Manifest (for security version control)
+
+### npm (Node.js) — Production
+| Package | Version | Purpose |
+|---------|---------|---------|
+| `express` | 4.21.2 | HTTP server |
+| `helmet` | 8.0.0 | Security headers |
+| `express-rate-limit` | 7.5.0 | Rate limiting |
+| `cors` | 2.8.5 | CORS middleware |
+| `argon2` | 0.43.0 | Password hashing (Argon2id) |
+| `mongodb` | 6.12.0 | MongoDB Atlas client |
+| `yahoo-finance2` | 2.13.3 | Market data |
+| `lightweight-charts` | 4.2.0 | Native charting (MIT) |
+| `react` | 19.2.0 | UI framework |
+| `react-dom` | 19.2.0 | React DOM |
+| `react-router-dom` | 7.6.0 | Client routing |
+| `zustand` | 5.0.5 | State management |
+| `recharts` | 2.15.3 | Data visualization |
+| `multer` | 1.4.5-lts.1 | File uploads |
+| `concurrently` | 9.1.2 | Dev process runner |
+
+### Python — ai_backend
+| Package | Version | Purpose |
+|---------|---------|---------|
+| `fastapi` | 0.115.5 | API framework |
+| `uvicorn[standard]` | 0.32.1 | ASGI server |
+| `pydantic` | 2.9.2 | Data validation |
+| `numpy` | 1.26.4 | Numerical computing |
+| `pandas` | 2.2.3 | Data manipulation |
+| `scipy` | 1.14.1 | Scientific computing |
+| `scikit-learn` | 1.5.2 | ML base models |
+| `lightgbm` | 4.5.0 | Gradient boosting |
+| `xgboost` | 2.1.3 | Gradient boosting |
+| `statsmodels` | 0.14.4 | ARIMA/GARCH |
+| `ta` | 0.11.0 | Technical indicators |
+| `httpx` | 0.27.2 | Async HTTP client |
+| `Pillow` | 12.2.0 | Image processing |
+| `pytesseract` | 0.3.13 | OCR |
+| `python-dotenv` | 1.0.1 | Env vars |
+| `joblib` | 1.4.2 | Model serialization |
+| `numpy-financial` | 1.0.0 | Financial math |
+
+**RULE: When user provides updated secure version numbers, update both this table AND the actual files, then self-install and update the repo.**
+
+---
+
+## App MOTTO (always enforce)
+> Make as much money as possible at sensible scenarios — accessible to market beginners.
+> Protect current wealth first. Generate probability of profit up to 88%.
+> All predictions carry inherent risk. NOT financial advice. NOT trade execution. Analysis only.
+
+## Session operating rules
+- Push to `stockmind-source` branch on every considerable change or when user requests
+- When user provides new architecture blueprints/documents: analyze gaps vs existing, implement missing modules, do not duplicate existing
+- When new technology versions arrive: update dependency manifest above, update files, self-install, push
+- Security is the most important aspect — always choose stable, pinned, well-audited versions
+- All prediction probability outputs must be clamped: floor 5%, ceiling 99% (target up to 88% confidence)

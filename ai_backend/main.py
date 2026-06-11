@@ -42,6 +42,10 @@ from engine.smart_theme_creator import create_theme_from_search, get_capabilitie
 from engine.jarvis_x_core import JARVIS_X
 from engine.unified_data_hub import DATA_HUB
 from engine.dynamic_router import DIO
+from engine.perception_engine import get_perception_engine
+from engine.inference_scale_quantizer import get_isq
+from engine.multi_horizon_wave import get_wave_engine
+from engine.friday_nexus import get_friday_nexus, PHI_MIN, GAMMA_DISCOUNT
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("stockmind-ai")
@@ -1514,4 +1518,351 @@ def jarvis_x_capabilities():
             "no_trade_execution":        True,
         },
         "asi_level": round(JARVIS_X.asi_monitor._asi_level, 3),
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Blueprint AGI Endpoints — Perception, ISQ, Multi-Horizon Wave
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.get("/agi/isq-status")
+def agi_isq_status():
+    """Inference Scale Quantizer status — ARC gauge + circuit breaker."""
+    isq = get_isq()
+    status = isq.get_status()
+    # Include last computed Ps and Ptrap from cache
+    status["ok"] = True
+    return status
+
+
+@app.post("/agi/isq-quantize")
+def agi_isq_quantize(body: dict):
+    """
+    Run full ISQ quantize pass for a set of signals.
+    Body: { signals, sigma, volume_imbalance?, order_imbalance? }
+    """
+    isq = get_isq()
+    signals  = body.get("signals", [])
+    sigma    = float(body.get("sigma", 0.02))
+    vol_imb  = float(body.get("volume_imbalance", 0.0))
+    ord_imb  = float(body.get("order_imbalance", 0.0))
+    result   = isq.quantize(signals, sigma, vol_imb, ord_imb)
+    return {"ok": True, **result}
+
+
+@app.post("/agi/perception-ingest")
+def agi_perception_ingest(body: dict):
+    """
+    Perception Engine ingestion endpoint.
+    Body: { symbol, ohlcv, context? }
+    """
+    perception = get_perception_engine()
+    symbol  = str(body.get("symbol", "UNKNOWN")).upper()
+    ohlcv   = body.get("ohlcv", [])
+    context = body.get("context", {})
+    result  = perception.ingest(symbol, ohlcv, context)
+    return result
+
+
+@app.get("/agi/perception-status")
+def agi_perception_status():
+    """Perception Engine status — ingestion counts, anomalies, vector ledger."""
+    perception = get_perception_engine()
+    return {"ok": True, **perception.get_status()}
+
+
+@app.post("/jarvis/multi-horizon")
+async def jarvis_multi_horizon(body: dict):
+    """
+    Multi-Horizon Wave Model projections.
+    Body: { symbol, exchange?, regime?, macro_bias?, sentiment? }
+    Returns: intraday (4h) + swing (7d) + macro cycle projections.
+    """
+    import httpx
+    symbol     = str(body.get("symbol", "NIFTY50")).upper()
+    exchange   = str(body.get("exchange", "NSE")).upper()
+    regime     = str(body.get("regime", "trending_bull"))
+    macro_bias = float(body.get("macro_bias", 0.0))
+    sentiment  = float(body.get("sentiment", 0.0))
+
+    # Fetch OHLCV from Node.js market API (avoids duplicate yfinance dependency)
+    bars_data = []
+    try:
+        import urllib.request, json as _json
+        req_url = f"http://localhost:4098/api/market/ohlcv/{symbol}"
+        req = urllib.request.Request(req_url, headers={"x-session-token": "internal"})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = _json.loads(resp.read())
+            for bar in (data.get("data") or []):
+                import time as _time
+                t = bar.get("time", 0) or int(_time.mktime(_time.strptime(bar.get("date", "2024-01-01"), "%Y-%m-%d")))
+                bars_data.append({
+                    "time":   t,
+                    "open":   float(bar.get("open", 0)),
+                    "high":   float(bar.get("high", 0)),
+                    "low":    float(bar.get("low", 0)),
+                    "close":  float(bar.get("close", 0)),
+                    "volume": float(bar.get("volume", 0)),
+                })
+    except Exception as e:
+        logger.warning("[MHW] OHLCV fetch from market API failed for %s: %s", symbol, e)
+
+    # Fall back to mock data if fetch failed
+    if len(bars_data) < 30:
+        from engine.data_fetcher import mock_ohlcv
+        try:
+            mock_df = mock_ohlcv(25000.0 if "NIFTY" in symbol else 50000.0, 200)
+            import numpy as _np
+            base_times = [int(1700000000 + i * 86400) for i in range(len(mock_df))]
+            for i, row in mock_df.iterrows():
+                bars_data.append({
+                    "time": base_times[i], "open": float(row["open"]),
+                    "high": float(row["high"]), "low": float(row["low"]),
+                    "close": float(row["close"]), "volume": float(row.get("volume", 0)),
+                })
+        except Exception as e2:
+            return {"ok": False, "reason": f"no_ohlcv_data: {e2}"}
+
+    wave  = get_wave_engine()
+    result = wave.project(
+        symbol=symbol, ohlcv=bars_data,
+        regime=regime, macro_bias=macro_bias, sentiment=sentiment,
+    )
+
+    # Run ISQ pass on this projection
+    isq = get_isq()
+    closes = [b["close"] for b in bars_data[-20:] if b["close"] > 0]
+    if len(closes) > 2:
+        import numpy as _np
+        sigma = float(_np.std(_np.diff(_np.log([c for c in closes]))))
+    else:
+        sigma = 0.02
+
+    dummy_signals = [
+        {"probability": int(result.get("intraday", {}).get("probability", 0.6) * 100)},
+        {"probability": int(result.get("swing",    {}).get("probability", 0.6) * 100)},
+        {"probability": int(result.get("macro",    {}).get("probability", 0.6) * 100)},
+    ]
+    isq_result = isq.quantize(dummy_signals, sigma)
+    result["isq"] = isq_result
+
+    return result
+
+
+@app.get("/jarvis/multi-horizon/status")
+def jarvis_multi_horizon_status():
+    """Multi-Horizon Wave Engine status."""
+    wave = get_wave_engine()
+    return {"ok": True, **wave.get_status()}
+
+
+@app.post("/agi/arc-burn")
+def agi_arc_burn(body: dict):
+    """Record token burn manually. Body: { tokens, provider, task }"""
+    isq    = get_isq()
+    tokens = int(body.get("tokens", 0))
+    prov   = str(body.get("provider", "manual"))
+    task   = str(body.get("task", "manual"))
+    gauge  = isq.arc_gauge.record_burn(tokens, prov, task)
+    return {"ok": True, "gauge": gauge}
+
+
+@app.get("/agi/arc-gauge")
+def agi_arc_gauge():
+    """ARC Compute Energy Gauge — current token burn state."""
+    isq = get_isq()
+    return {"ok": True, "gauge": isq.arc_gauge.get_gauge()}
+
+
+@app.post("/agi/arc-circuit-reset")
+def agi_arc_circuit_reset():
+    """Manually reset the ARC circuit breaker."""
+    isq = get_isq()
+    isq.arc_gauge.reset_circuit()
+    return {"ok": True, "gauge": isq.arc_gauge.get_gauge()}
+
+
+@app.get("/agi/circuit-breaker")
+def agi_circuit_breaker():
+    """API Circuit Breaker status — read-only lock verification."""
+    isq = get_isq()
+    return {"ok": True, **isq.circuit_breaker.get_status()}
+
+
+@app.post("/agi/circuit-check")
+def agi_circuit_check(body: dict):
+    """Check if a scope is allowed through the read-only lock."""
+    isq       = get_isq()
+    scope     = str(body.get("scope", ""))
+    requester = str(body.get("requester", "api"))
+    result    = isq.circuit_breaker.check_scope(scope, requester)
+    return result
+
+
+@app.get("/agi/blueprint-status")
+def agi_blueprint_status():
+    """
+    Full AGI Blueprint status — all layers from both architecture diagrams.
+    Returns status for: Perception Engine, ISQ, Multi-Horizon Wave,
+    Vector Ledger, Episodic Memory, ARC Gauge, Circuit Breaker.
+    """
+    perception = get_perception_engine()
+    isq        = get_isq()
+    wave       = get_wave_engine()
+
+    return {
+        "ok": True,
+        "blueprint": "StockMind AGI Core // JARVIS Mark-V",
+        "layer_I_hud": {
+            "arc_gauge":       isq.arc_gauge.get_gauge(),
+            "circuit_breaker": isq.circuit_breaker.get_status(),
+        },
+        "layer_II_agentic": {
+            "perception_engine": perception.get_status(),
+            "isq_quantizer":     isq.get_status(),
+            "wave_models":       wave.get_status(),
+            "jarvis_x":          JARVIS_X.get_full_status(),
+            "agi_engine":        AGI_ENGINE.get_status(),
+        },
+        "layer_III_fabric": {
+            "vector_ledger":     perception.vector_ledger.get_stats(),
+            "episodic_memory":   perception.episodic_memory.get_stats(),
+            "data_hub":          DATA_HUB.get_status(),
+            "dio_router":        DIO.get_status() if hasattr(DIO, 'get_status') else {},
+        },
+        "mathematical_protocols": {
+            "ps_formula":    "Ps = max(0, sum(w * [1 - P(Drawdown) * gamma]))",
+            "calloc_formula":"Calloc = min(Cmax, Ccase * exp(alpha*H + beta*(sigma^2/theta)))",
+            "ptrap_formula": "Ptrap = 1 / (1 + exp(-(lambda1*V + lambda2*I - gamma)))",
+            "params": {
+                "gamma_ps": 0.85, "c_max": 8000, "alpha_h": 0.15,
+                "beta_sigma": 0.30, "theta_base": 0.25,
+                "lambda1_v": 2.2, "lambda2_i": 1.8, "gamma_trap": 1.5,
+            },
+        },
+        "ts": time.time(),
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Friday Nexus Protocol Engine — Schema V5.00 Endpoints
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.get("/friday-nexus/status")
+def friday_nexus_status():
+    """Friday Nexus full status: ToT-MAC, MCTS, GAM-WAR, A* optimizer."""
+    fn = get_friday_nexus()
+    return {"ok": True, "status": fn.get_status(), "schema_version": "V5.00"}
+
+
+@app.post("/friday-nexus/optimize")
+def friday_nexus_optimize(body: dict):
+    """
+    Run full A* optimization pass.
+    Body: { signals, ps, ptrap, calloc, regime, volume_imbalance?, order_imbalance? }
+    A* = argmax_A [ sum(gamma^t * E[Rt(A)] * (1 - Ptrap,t)) ]
+    Subject to: Ps >= Phi_min AND Tokens(A) <= Calloc
+    """
+    fn       = get_friday_nexus()
+    signals  = body.get("signals", [])
+    ps       = float(body.get("ps", 0.6))
+    ptrap    = float(body.get("ptrap", 0.2))
+    calloc   = int(body.get("calloc", 1000))
+    regime   = str(body.get("regime", "ranging"))
+    vol_imb  = float(body.get("volume_imbalance", 0.0))
+    ord_imb  = float(body.get("order_imbalance", 0.0))
+
+    import numpy as _np
+    features = _np.array(body.get("features", [0.0] * 15), dtype=_np.float32)
+
+    result = fn.optimize(
+        features=features, signals=signals,
+        ps=ps, ptrap=ptrap, calloc=calloc,
+        regime=regime,
+        volume_imbalance=vol_imb,
+        order_imbalance=ord_imb,
+    )
+    return {"ok": True, **result}
+
+
+@app.post("/friday-nexus/debate")
+def friday_nexus_debate(body: dict):
+    """
+    Run ToT-MAC multi-agent debate on a set of signals.
+    Body: { signals, regime?, features? }
+    """
+    fn      = get_friday_nexus()
+    signals = body.get("signals", [])
+    regime  = str(body.get("regime", "ranging"))
+
+    import numpy as _np
+    features = _np.array(body.get("features", [0.0] * 15), dtype=_np.float32)
+
+    result = fn.tot_mac.debate(features, signals, regime)
+    return {"ok": True, **result}
+
+
+@app.post("/friday-nexus/mcts-search")
+def friday_nexus_mcts(body: dict):
+    """
+    Alpha Space MCTS search for optimal action.
+    Body: { signals, ps, ptrap, calloc, regime? }
+    """
+    fn      = get_friday_nexus()
+    signals = body.get("signals", [])
+    ps      = float(body.get("ps", 0.6))
+    ptrap   = float(body.get("ptrap", 0.2))
+    calloc  = int(body.get("calloc", 1000))
+    regime  = str(body.get("regime", "ranging"))
+
+    result = fn.mcts.search(signals, ps, ptrap, calloc, regime)
+    return {"ok": True, **result}
+
+
+@app.post("/friday-nexus/gamwar-detect")
+def friday_nexus_gamwar(body: dict):
+    """
+    GAM-WAR live attack detection.
+    Body: { volume_imbalance, order_imbalance, price_action? }
+    """
+    fn      = get_friday_nexus()
+    vol_imb = float(body.get("volume_imbalance", 0.0))
+    ord_imb = float(body.get("order_imbalance", 0.0))
+    pa      = body.get("price_action", {})
+
+    result = fn.gamwar.detect_live(vol_imb, pa, ord_imb)
+    return {"ok": True, **result}
+
+
+@app.post("/friday-nexus/gamwar-generate")
+def friday_nexus_gamwar_generate(body: dict):
+    """
+    Generate a synthetic adversarial market scenario for testing.
+    Body: { attack_type? }  — one of: pump_dump, spoofing, wash_trading, news_shock, stop_hunt
+    """
+    fn          = get_friday_nexus()
+    attack_type = body.get("attack_type")  # None = random
+    result      = fn.gamwar.generate_adversarial(attack_type)
+    return {"ok": True, **result}
+
+
+@app.get("/friday-nexus/math-constants")
+def friday_nexus_math():
+    """Return the mathematical constants and formulas from Schema V5.00."""
+    return {
+        "ok": True,
+        "schema":    "V5.00 — STARK FINTECH SYSTEM ENGINE",
+        "formulas": {
+            "global_optimization": "A* = argmax_A [ sum(gamma^t * E[Rt(A)] * (1 - Ptrap,t)) ]",
+            "safety_floor":        "Ps >= Phi_min  AND  Tokens(A) <= Calloc",
+            "calloc":              "Calloc = min(Cmax, Ccase * exp(alpha*H + beta*(sigma^2/theta)))",
+        },
+        "constants": {
+            "gamma":   GAMMA_DISCOUNT,
+            "phi_min": PHI_MIN,
+            "c_puct":  1.414,
+        },
+        "debate_system":   "ToT-MAC — Tree-of-Thought Multi-Agent Consensus",
+        "search_system":   "Alpha Space MCTS — Monte Carlo Tree Search",
+        "defense_system":  "GAM-WAR — Generative Adversarial Market Warfare",
     }

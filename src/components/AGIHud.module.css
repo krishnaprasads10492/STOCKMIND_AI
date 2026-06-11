@@ -1,0 +1,137 @@
+/* ── AGI HUD Components ── */
+
+/* ── Financial Traffic Light ── */
+.trafficLight {
+  display: flex; align-items: center; gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-lg);
+  border: 1px solid;
+  flex-shrink: 0;
+  min-width: 200px;
+}
+.tl_emerald { background: rgba(0,255,136,0.06); border-color: rgba(0,255,136,0.3); }
+.tl_amber   { background: rgba(255,170,0,0.06);  border-color: rgba(255,170,0,0.3); }
+.tl_crimson { background: rgba(255,51,102,0.08); border-color: rgba(255,51,102,0.4); }
+
+.tlDots { display: flex; flex-direction: column; gap: 4px; }
+.tlDot  { width: 10px; height: 10px; border-radius: 50%; opacity: 0.2; transition: all 0.3s; }
+.dot_crimson { background: var(--color-bear); }
+.dot_amber   { background: var(--color-warn); }
+.dot_emerald { background: var(--color-bull); }
+.tlDotActive { opacity: 1; box-shadow: 0 0 8px currentColor; }
+
+.tlInfo  { display: flex; flex-direction: column; gap: 1px; flex: 1; }
+.tlText  { font-size: var(--text-xs); font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+.tl_emerald .tlText { color: var(--color-bull); }
+.tl_amber   .tlText { color: var(--color-warn); }
+.tl_crimson .tlText { color: var(--color-bear); }
+.tlSub    { font-size: 0.6rem; color: var(--color-text-muted); }
+.tlSymbol { font-size: 0.6rem; font-family: var(--font-mono); color: var(--color-text-secondary); }
+
+.tlMetrics { display: flex; flex-direction: column; gap: 2px; font-size: 0.6rem; font-family: var(--font-mono); color: var(--color-text-muted); }
+.tlMetric b { color: var(--color-text-primary); }
+
+/* ── ARC Gauge ── */
+.arcGauge {
+  display: flex; flex-direction: column; gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  border: 1px solid;
+  min-width: 180px;
+}
+.arc_emerald { background: rgba(0,255,136,0.04); border-color: rgba(0,255,136,0.2); }
+.arc_amber   { background: rgba(255,170,0,0.05);  border-color: rgba(255,170,0,0.25); }
+.arc_crimson { background: rgba(255,51,102,0.06); border-color: rgba(255,51,102,0.3); }
+
+.arcHeader { display: flex; align-items: center; justify-content: space-between; }
+.arcTitle  { font-size: var(--text-xs); font-weight: 700; color: var(--color-text-secondary); }
+.arcCircuit { font-size: 0.6rem; font-weight: 800; color: var(--color-bear); letter-spacing: 0.1em; animation: blink 1s infinite; }
+@keyframes blink { 0%,100% { opacity: 1 } 50% { opacity: 0.3 } }
+
+.arcBars { display: flex; flex-direction: column; gap: 4px; }
+.arcBarRow { display: flex; align-items: center; gap: var(--space-2); }
+.arcBarLabel { font-size: 0.6rem; color: var(--color-text-muted); width: 36px; flex-shrink: 0; }
+.arcBarTrack { flex: 1; height: 6px; background: var(--color-bg-elevated); border-radius: 3px; overflow: hidden; }
+.arcBarFill  { height: 100%; border-radius: 3px; transition: width 0.5s; }
+.arc_emerald .arcBarFill { background: var(--color-bull); }
+.arc_amber   .arcBarFill { background: var(--color-warn); }
+.arc_crimson .arcBarFill { background: var(--color-bear); }
+.arcBarVal  { font-size: 0.6rem; font-family: var(--font-mono); color: var(--color-text-muted); width: 28px; text-align: right; }
+.arcBurned  { font-size: 0.6rem; color: var(--color-text-muted); font-family: var(--font-mono); }
+
+/* ── Reasoning Context Traces ── */
+.reasoningTraces {
+  display: flex; flex-direction: column; gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+}
+.rtHeader { display: flex; align-items: center; justify-content: space-between; }
+.rtTitle  { font-size: var(--text-sm); font-weight: 700; color: var(--color-text-primary); }
+.rtBadge  { font-size: 0.6rem; font-weight: 700; padding: 2px 8px; background: var(--color-accent-dim); border: 1px solid var(--color-border-glow); border-radius: var(--radius-full); color: var(--color-accent); }
+.rtBlock  { display: flex; flex-direction: column; gap: var(--space-1); }
+.rtBlockLabel { font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-text-muted); }
+.rtText   { font-size: var(--text-sm); color: var(--color-text-secondary); line-height: 1.6; margin: 0; }
+
+.rtHorizons { display: flex; gap: var(--space-2); margin-top: var(--space-1); }
+.rtHorizon  { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: var(--space-1) var(--space-2); border-radius: var(--radius-md); background: var(--color-bg-surface); border: 1px solid var(--color-border); min-width: 60px; }
+.rtHLabel  { font-size: 0.6rem; color: var(--color-text-muted); text-transform: uppercase; }
+.rtHDir    { font-size: var(--text-base); font-weight: 800; }
+.rtHProb   { font-size: 0.65rem; font-family: var(--font-mono); color: var(--color-text-secondary); }
+
+.dir_bull .rtHDir   { color: var(--color-bull); }
+.dir_bear .rtHDir   { color: var(--color-bear); }
+.dir_neutral .rtHDir { color: var(--color-text-muted); }
+.dir_bull { border-color: rgba(0,255,136,0.3) !important; }
+.dir_bear { border-color: rgba(255,51,102,0.3) !important; }
+
+.rtReasons { margin: 0; padding-left: var(--space-4); display: flex; flex-direction: column; gap: 2px; }
+.rtReason  { font-size: var(--text-xs); color: var(--color-text-secondary); line-height: 1.5; }
+.rtDisclaimer { font-size: 0.6rem; color: var(--color-text-muted); font-style: italic; padding-top: var(--space-2); border-top: 1px solid var(--color-border-subtle); }
+
+/* ── Wave Projection Panel ── */
+.wavePanel {
+  display: flex; flex-direction: column; gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+}
+.waveHeader { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.waveTitle  { font-size: var(--text-sm); font-weight: 700; color: var(--color-text-primary); }
+.waveSymbol { font-size: var(--text-xs); font-family: var(--font-mono); color: var(--color-text-muted); }
+.waveUnified { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-xs); font-weight: 700; padding: 2px 8px; border-radius: var(--radius-full); }
+.dir_bull.waveUnified { color: var(--color-bull); background: var(--color-bull-dim); }
+.dir_bear.waveUnified { color: var(--color-bear); background: var(--color-bear-dim); }
+.dir_neutral.waveUnified { color: var(--color-text-muted); background: var(--color-bg-elevated); }
+.waveAlign  { font-size: 0.6rem; font-weight: 400; color: var(--color-text-muted); }
+
+.waveHorizons { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-2); }
+.waveHBlock { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: var(--space-2); background: var(--color-bg-elevated); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md); text-align: center; }
+.waveHName  { font-size: 0.6rem; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.waveHDir   { font-size: var(--text-lg); font-weight: 800; }
+.waveHProb  { font-size: var(--text-xs); font-family: var(--font-mono); font-weight: 700; }
+.waveHTarget { font-size: 0.6rem; color: var(--color-text-muted); font-family: var(--font-mono); }
+.dir_bull .waveHDir   { color: var(--color-bull); }
+.dir_bear .waveHDir   { color: var(--color-bear); }
+.dir_neutral .waveHDir { color: var(--color-text-muted); }
+
+/* Wave vector visualization bars */
+.waveVector { display: flex; align-items: flex-end; gap: 3px; height: 32px; padding: 0 var(--space-2); }
+.waveVBar   { flex: 1; background: var(--color-bg-elevated); border-radius: 2px; height: 100%; display: flex; align-items: flex-end; }
+.waveVFill  { width: 100%; background: var(--color-accent); border-radius: 2px; transition: height 0.5s; min-height: 2px; }
+.waveFooter { font-size: 0.6rem; color: var(--color-text-muted); font-family: var(--font-mono); }
+.waveLoading { font-size: var(--text-xs); color: var(--color-text-muted); padding: var(--space-3); }
+
+/* ── HUD Layouts ── */
+.hudCompact { display: flex; gap: var(--space-3); flex-wrap: wrap; align-items: flex-start; }
+.hudFull    { display: flex; flex-direction: column; gap: var(--space-4); }
+.hudRow     { display: flex; gap: var(--space-3); flex-wrap: wrap; align-items: flex-start; }
+
+/* ── Mobile ── */
+@media (max-width: 640px) {
+  .waveHorizons   { grid-template-columns: 1fr 1fr 1fr; }
+  .trafficLight   { min-width: unset; }
+  .hudRow         { flex-direction: column; }
+}

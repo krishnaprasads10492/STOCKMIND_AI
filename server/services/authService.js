@@ -18,11 +18,12 @@ import { readSecure, writeSecure, existsSecure, listSecure } from '../storage/fi
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const SESSION_TTL_MS      = 8 * 60 * 60 * 1000   // 8 hours
-const SESSION_SLIDE_MS    = 30 * 60 * 1000        // slide by 30 min on activity
-const STEP1_TTL_MS        = 10 * 60 * 1000        // 10 min to enter key
-const LOCKOUT_ATTEMPTS    = 5                      // failed attempts before lockout
-const LOCKOUT_DURATION_MS = 15 * 60 * 1000        // 15-minute lockout
+const SESSION_TTL_MS      = 7 * 24 * 60 * 60 * 1000  // 7 days — survives restarts
+const SESSION_SLIDE_MS    = 60 * 60 * 1000            // slide by 1 hour on activity
+const STEP1_TTL_MS        = 10 * 60 * 1000            // 10 min to enter key
+const LOCKOUT_ATTEMPTS    = 5                          // failed attempts before lockout
+const LOCKOUT_DURATION_MS = 15 * 60 * 1000            // 15-minute lockout
+const SESSION_PERSIST_KEY = 'system/sessions'          // encrypted session store path
 
 // Argon2id parameters — OWASP recommended minimums
 const ARGON2_OPTIONS = {
@@ -39,6 +40,40 @@ const sessions = new Map()
 
 /** Map<username, { count, lockedUntil }> */
 const loginAttempts = new Map()
+
+// ── Session persistence ───────────────────────────────────────────────────────
+// Full sessions (step=2 only) are persisted to encrypted disk so they survive
+// server restarts. Step-1 tokens are ephemeral and never persisted.
+
+function persistSessions() {
+  try {
+    const now = Date.now()
+    const toSave = {}
+    for (const [token, sess] of sessions) {
+      // Only persist fully-authenticated sessions that haven't expired
+      if (sess.step === 2 && sess.expiresAt > now) {
+        toSave[token] = sess
+      }
+    }
+    writeSecure(SESSION_PERSIST_KEY, toSave)
+  } catch { /* non-fatal */ }
+}
+
+export function loadPersistedSessions() {
+  try {
+    const saved = readSecure(SESSION_PERSIST_KEY)
+    if (!saved || typeof saved !== 'object') return
+    const now = Date.now()
+    let loaded = 0
+    for (const [token, sess] of Object.entries(saved)) {
+      if (sess.step === 2 && sess.expiresAt > now) {
+        sessions.set(token, sess)
+        loaded++
+      }
+    }
+    if (loaded > 0) console.log(`[Auth] Restored ${loaded} active session(s) from disk`)
+  } catch { /* non-fatal — fresh start */ }
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -237,6 +272,9 @@ export function loginStep2(stepToken, key) {
     loginCount:  (user.loginCount ?? 0) + 1,
   })
 
+  // Persist sessions so they survive server restarts
+  persistSessions()
+
   return {
     ok: true,
     sessionToken,
@@ -262,6 +300,8 @@ export function validateSession(token) {
   if (now - sess.lastActivity > SESSION_SLIDE_MS) {
     sess.expiresAt    = now + SESSION_TTL_MS
     sess.lastActivity = now
+    // Persist the updated expiry (debounced — only write if significantly changed)
+    persistSessions()
   }
 
   return { userId: sess.userId, username: sess.username, role: sess.role }
@@ -280,6 +320,7 @@ export function validateStepToken(token) {
 
 export function logout(token) {
   sessions.delete(token)
+  persistSessions()
 }
 
 export function getActiveSessions() {
@@ -380,6 +421,7 @@ export async function changePassword(userId, currentPassword, newPassword, byAdm
   for (const [token, sess] of sessions) {
     if (sess.userId === userId) sessions.delete(token)
   }
+  persistSessions()
 
   return { ok: true }
 }
@@ -409,6 +451,7 @@ export function deactivateUser(userId) {
   for (const [token, sess] of sessions) {
     if (sess.userId === userId) sessions.delete(token)
   }
+  persistSessions()
   return { ok: true }
 }
 

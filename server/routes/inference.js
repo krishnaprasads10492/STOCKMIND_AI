@@ -12,7 +12,7 @@
 import { Router } from 'express'
 import { requireAuth } from '../middleware/auth.js'
 import { sanitizeTicker } from '../utils/sanitize.js'
-import { fetchOHLCV } from '../services/yahooFinanceService.js'
+import { fetchOHLCV, fetchQuote } from '../services/yahooFinanceService.js'
 import { computeAdaptiveWeight } from '../services/predictionStore.js'
 
 const router = Router()
@@ -65,10 +65,23 @@ router.post('/predict', requireAuth, async (req, res) => {
 
   // Enrich with real OHLCV data (AI backend uses this for real features)
   let ohlcv = null
+  let basePrice = body.basePrice ?? null
+
   try {
     ohlcv = await fetchOHLCV(ticker, body.exchange ?? 'NSE', 750)  // 3 years
   } catch {
     // Non-fatal — AI backend will use mock OHLCV if not provided
+  }
+
+  // Fetch live price if basePrice not provided
+  if (!basePrice) {
+    try {
+      const quote = await fetchQuote(ticker, body.exchange ?? 'NSE')
+      basePrice = quote?.close ?? quote?.price ?? ohlcv?.[ohlcv.length - 1]?.close ?? 100
+    } catch {
+      // Use last OHLCV close as fallback
+      basePrice = ohlcv?.[ohlcv.length - 1]?.close ?? 100
+    }
   }
 
   // Compute adaptive weight from learning history
@@ -79,12 +92,11 @@ router.post('/predict', requireAuth, async (req, res) => {
   const enriched = {
     ...body,
     symbol:          ticker,
+    basePrice:       basePrice,
     adaptiveWeight,
-    ohlcv:           ohlcv ?? null,  // null = AI backend uses mock
+    ohlcv:           ohlcv ?? null,
     predictionMode:  body.predictionMode ?? 'both',
-    // Futures meta passthrough
     futuresMeta:     body.futuresMeta ?? null,
-    // Options meta passthrough
     optionMeta:      body.optionMeta ?? null,
   }
 

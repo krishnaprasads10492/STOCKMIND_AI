@@ -1,14 +1,22 @@
 /**
- * @fileoverview Base API client with circuit-breaker, retry, and rate-limit handling.
+ * @fileoverview Base API client with circuit-breaker, retry, rate-limit handling,
+ * and automatic session token injection from localStorage.
  */
 
-const DEFAULT_TIMEOUT_MS = 8_000   // tighter — fail fast, don't block UI
+const DEFAULT_TIMEOUT_MS = 8_000
 const MAX_RETRIES        = 2
-const RETRY_BASE_DELAY   = 200     // faster first retry
+const RETRY_BASE_DELAY   = 200
 
 const circuitState = new Map()
-const CIRCUIT_FAILURE_THRESHOLD = 4   // trip faster
-const CIRCUIT_OPEN_DURATION_MS  = 20_000  // recover faster (20s vs 30s)
+const CIRCUIT_FAILURE_THRESHOLD = 4
+const CIRCUIT_OPEN_DURATION_MS  = 20_000
+
+const TOKEN_KEY = 'sm_session'
+
+/** Read the session token from localStorage (works in browser only). */
+function getStoredToken() {
+  try { return localStorage.getItem(TOKEN_KEY) ?? null } catch { return null }
+}
 
 /**
  * Resolve a URL to an absolute URL so new URL() never throws on relative paths.
@@ -84,6 +92,9 @@ export async function apiFetch(url, options = {}) {
         signal: controller.signal,
         headers: {
           'Content-Type': 'application/json',
+          // Auto-inject session token — callers don't need to pass it manually.
+          // Explicit header in fetchOptions.headers takes precedence if provided.
+          ...(getStoredToken() ? { 'x-session-token': getStoredToken() } : {}),
           ...fetchOptions.headers,
         },
       })
@@ -102,6 +113,15 @@ export async function apiFetch(url, options = {}) {
           const body = await response.clone().json()
           if (body.error) message = body.error
         } catch { /* ignore */ }
+
+        // 401 — token is invalid/expired. Clear it so the user gets redirected to login.
+        if (response.status === 401) {
+          try {
+            localStorage.removeItem(TOKEN_KEY)
+            localStorage.removeItem('sm_user')
+          } catch { /* ignore */ }
+        }
+
         throw new ApiError(message, response.status, url)
       }
 

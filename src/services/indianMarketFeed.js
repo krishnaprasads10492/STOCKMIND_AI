@@ -17,7 +17,7 @@ const POLL_MS = 2_400
 // ── Auth header helper ────────────────────────────────────────────────────────
 
 function authHeader() {
-  const token = sessionStorage.getItem('sm_session')
+  const token = localStorage.getItem('sm_session')
   return token ? { 'x-session-token': token } : {}
 }
 

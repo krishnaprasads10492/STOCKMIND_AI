@@ -13,7 +13,7 @@ import { fileURLToPath } from 'url'
 import { initEncryption, existsSecure } from './storage/fileStore.js'
 import { initAuditLog, auditLog, verifyAuditChain, queryAuditLog, getAuditStats } from './storage/auditLog.js'
 import { DB } from './storage/dbAdapter.js'
-import { createUser } from './services/authService.js'
+import { createUser, loadPersistedSessions } from './services/authService.js'
 import authRoutes          from './routes/auth.js'
 import userRoutes          from './routes/users.js'
 import predictionRoutes    from './routes/predictions.js'
@@ -32,6 +32,7 @@ import derivativesRoutes   from './routes/derivatives.js'
 import multibaggerRoutes   from './routes/multibagger.js'
 import imageAnalysisRoutes from './routes/imageAnalysis.js'
 import configuratorRoutes  from './routes/configurator.js'
+import strategyAIRoutes    from './routes/strategyAI.js'
 import { startOutcomeValidator, getValidatorStatus, addSSEClient, startCleanupScheduler } from './services/outcomeValidator.js'
 import { rebuildAMIIndex } from './services/amiStore.js'
 import { rebuildPredictionIndex } from './services/predictionStore.js'
@@ -59,6 +60,8 @@ async function initSecurity() {
   await initEncryption(DATA_PASSWORD)
   initAuditLog(DATA_PASSWORD)
   await DB.init()
+  // Restore sessions from disk — users stay logged in across server restarts
+  loadPersistedSessions()
   // Connect MongoDB Atlas if URI is configured
   if (process.env.MONGODB_ATLAS_URI || process.env.MONGODB_URI) {
     connectMongo().then(db => {
@@ -121,7 +124,8 @@ app.use(helmet({
       defaultSrc:     ["'self'"],
       scriptSrc:      ["'self'", "'unsafe-inline'",
                        'https://s3.tradingview.com',
-                       'https://www.tradingview.com'],  // TradingView widget
+                       'https://www.tradingview.com',
+                       'https://s3.tradingview.com/tv.js'],  // TradingView widget constructor
       styleSrc:       ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
       imgSrc:         ["'self'", 'data:', 'blob:',
                        'https://images.unsplash.com',
@@ -213,6 +217,7 @@ app.use('/api/derivatives',    derivativesRoutes)
 app.use('/api/multibagger',    multibaggerRoutes)
 app.use('/api/image',          imageAnalysisRoutes)
 app.use('/api/configurator',   configuratorRoutes)
+app.use('/api/strategy-ai',   strategyAIRoutes)
 
 // ── Audit log routes (admin only) ─────────────────────────────────────────────
 app.get('/api/audit/stats',  (req, res) => res.json(getAuditStats()))
