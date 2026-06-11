@@ -371,8 +371,7 @@ router.post('/write-theme', requireAuth, async (req, res) => {
 // POST /api/jarvis/theme-from-image — create theme from uploaded image
 // Accepts: JSON { image_b64, name, description?, use_as_wallpaper?, n_colors? }
 // OR multipart with 'image' file field + other fields
-router.post('/theme-from-image', requireAuth, async (req, res) => {
-  try {
+router.post('/theme-from-image', requireAuth, async (req, res) => {  try {
     let image_b64 = req.body?.image_b64
     const name            = String(req.body?.name ?? '').trim()
     const description     = String(req.body?.description ?? '').trim()
@@ -394,6 +393,30 @@ router.post('/theme-from-image', requireAuth, async (req, res) => {
     res.json(data)
   } catch (err) {
     if (err.name === 'AbortError') return res.status(504).json({ error: 'Theme generation timed out' })
+    res.status(503).json({ error: 'AI backend unavailable' })
+  }
+})
+
+// POST /api/jarvis/theme-compare
+// Runs web search + uploaded image extraction in parallel, scores both, returns for comparison.
+router.post('/theme-compare', requireAuth, async (req, res) => {
+  try {
+    const name           = String(req.body?.name ?? '').trim()
+    const style          = String(req.body?.style ?? '').trim()
+    const image_b64      = req.body?.image_b64 ?? null
+    const use_as_wallpaper = req.body?.use_as_wallpaper !== false
+    const n_colors       = Math.min(20, Math.max(4, Number(req.body?.n_colors ?? 10)))
+    const image_count    = Math.min(12, Math.max(2, Number(req.body?.image_count ?? 6)))
+
+    if (!name) return res.status(400).json({ error: 'name required' })
+
+    const data = await aiPost('/jarvis/theme-compare', {
+      name, style, image_b64, use_as_wallpaper, n_colors, image_count,
+    }, 90_000)   // longer timeout — runs two pipelines in parallel
+
+    res.json(data)
+  } catch (err) {
+    if (err.name === 'AbortError') return res.status(504).json({ error: 'Theme compare timed out' })
     res.status(503).json({ error: 'AI backend unavailable' })
   }
 })

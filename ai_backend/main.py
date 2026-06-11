@@ -2228,3 +2228,258 @@ async def jarvis_theme_from_image(req: ImageThemeRequest):
                 req.name, theme['key'], len(palette), bool(wallpaper_url))
 
     return {'ok': True, 'theme': theme}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Theme Comparison: Web Search vs Uploaded Image — run both, score + compare
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ThemeCompareRequest(BaseModel):
+    name:             str   = Field(..., min_length=1, max_length=60)
+    style:            str   = Field(default="", max_length=300)
+    image_b64:        Optional[str] = None   # uploaded image (optional)
+    use_as_wallpaper: bool  = Field(default=True)
+    n_colors:         int   = Field(default=10, ge=4, le=20)
+    image_count:      int   = Field(default=6, ge=2, le=12)
+
+
+def _score_theme_match(theme: dict, name: str, style: str) -> float:
+    """
+    Score how well a generated theme matches the user's intent (name + style).
+
+    Criteria:
+      - Hue alignment: do the colors match keywords in the name/style?
+      - Vibrancy: are the colors vivid enough for a trading UI?
+      - Contrast: dark background with bright accents
+      - Palette diversity: multiple distinct colors
+      - Named color match: e.g. "ocean" → expects blues/teals
+
+    Returns a score 0–100.
+    """
+    import colorsys as cs
+    score = 50.0  # neutral baseline
+
+    combined = (name + ' ' + style).lower()
+    palette_hex = theme.get('palette_hex') or theme.get('palette', [])
+
+    # Parse hex colors to RGB
+    colors_rgb = []
+    for h in palette_hex:
+        h = h.lstrip('#')
+        if len(h) == 6:
+            try:
+                r, g, b = int(h[0:2],16), int(h[2:4],16), int(h[4:6],16)
+                colors_rgb.append((r, g, b))
+            except ValueError:
+                pass
+
+    if not colors_rgb:
+        return score
+
+    # Compute HSV of accent (most likely first palette color after bg)
+    accent_hex = theme.get('vars', {}).get('--color-accent', '#ffffff')
+    ah = accent_hex.lstrip('#')
+    try:
+        ar, ag, ab = int(ah[0:2],16), int(ah[2:4],16), int(ah[4:6],16)
+        ah_val, as_val, av_val = cs.rgb_to_hsv(ar/255, ag/255, ab/255)
+    except (ValueError, IndexError):
+        ah_val, as_val, av_val = 0.55, 0.8, 0.9
+
+    # ── Hue keyword matching ──────────────────────────────────────────────────
+    hue_keywords = {
+        # Blues / Teals (hue 0.50–0.65)
+        'ocean': (0.55, 0.15), 'blue': (0.60, 0.15), 'sky': (0.57, 0.12),
+        'ice': (0.55, 0.15), 'teal': (0.50, 0.10), 'aqua': (0.52, 0.10),
+        'cyber': (0.55, 0.12), 'neon': (0.52, 0.20),
+        # Greens (hue 0.30–0.45)
+        'forest': (0.38, 0.10), 'jungle': (0.35, 0.10), 'matrix': (0.38, 0.08),
+        'nature': (0.37, 0.12), 'green': (0.35, 0.10), 'emerald': (0.40, 0.08),
+        # Reds / Oranges (hue 0.0–0.08 or 0.9–1.0)
+        'fire': (0.03, 0.15), 'lava': (0.02, 0.10), 'crimson': (0.97, 0.10),
+        'red': (0.0, 0.10), 'rust': (0.05, 0.12),
+        # Purples / Violets (hue 0.70–0.85)
+        'purple': (0.78, 0.10), 'violet': (0.76, 0.10), 'galaxy': (0.75, 0.15),
+        'cosmic': (0.72, 0.15), 'nebula': (0.75, 0.15), 'jarvis': (0.60, 0.12),
+        # Yellows / Ambers (hue 0.12–0.18)
+        'gold': (0.14, 0.08), 'amber': (0.10, 0.08), 'dune': (0.12, 0.08),
+        'sand': (0.13, 0.10), 'desert': (0.11, 0.10), 'stark': (0.12, 0.10),
+        # Pinks / Magentas (hue 0.85–0.97)
+        'pink': (0.90, 0.10), 'neon pink': (0.88, 0.10), 'tokyo': (0.87, 0.12),
+        'blade': (0.88, 0.10), 'sakura': (0.92, 0.08),
+        # Dark themes
+        'dark': None, 'black': None, 'shadow': None, 'void': None, 'midnight': (0.62, 0.10),
+        'gotham': (0.38, 0.10), 'tactical': (0.38, 0.10),
+    }
+
+    for kw, hue_info in hue_keywords.items():
+        if kw in combined and hue_info is not None:
+            target_hue, tolerance = hue_info
+            hue_diff = abs(ah_val - target_hue)
+            hue_diff = min(hue_diff, 1.0 - hue_diff)  # handle hue wrap
+            if hue_diff <= tolerance:
+                score += 20.0
+            elif hue_diff <= tolerance * 2:
+                score += 8.0
+            else:
+                score -= 5.0
+            break
+
+    # ── Vibrancy score ────────────────────────────────────────────────────────
+    avg_sat = sum(cs.rgb_to_hsv(r/255,g/255,b/255)[1] for r,g,b in colors_rgb) / len(colors_rgb)
+    score += avg_sat * 15  # up to +15 for fully saturated
+
+    # ── Contrast: dark bg + bright accent ────────────────────────────────────
+    bg_hex = theme.get('vars', {}).get('--color-bg-base', '#060b14')
+    bh = bg_hex.lstrip('#')
+    try:
+        br, bg_c, bb = int(bh[0:2],16), int(bh[2:4],16), int(bh[4:6],16)
+        bg_brightness = (br + bg_c + bb) / 765
+        accent_brightness = (ar + ag + ab) / 765
+        contrast = accent_brightness - bg_brightness
+        if contrast > 0.5:
+            score += 15.0
+        elif contrast > 0.3:
+            score += 8.0
+    except (ValueError, IndexError, UnboundLocalError):
+        pass
+
+    # ── Palette diversity ─────────────────────────────────────────────────────
+    hues = [cs.rgb_to_hsv(r/255,g/255,b/255)[0] for r,g,b in colors_rgb if cs.rgb_to_hsv(r/255,g/255,b/255)[1] > 0.2]
+    if len(hues) >= 3:
+        hue_range = max(hues) - min(hues)
+        score += min(10.0, hue_range * 20)
+
+    return round(min(100.0, max(0.0, score)), 1)
+
+
+@app.post("/jarvis/theme-compare")
+async def jarvis_theme_compare(req: ThemeCompareRequest):
+    """
+    Run BOTH theme generation paths in parallel and return both for comparison.
+
+    Path A — Web Search:
+      Search internet for images matching name+style → extract palette → build theme
+
+    Path B — Uploaded Image (if provided):
+      Extract palette from user's image → build theme
+
+    Each theme gets a 'match_score' (0-100) showing how well it matches intent.
+    Returns both themes side by side — user picks one (or neither).
+    """
+    import asyncio
+
+    results = {}
+
+    # ── Path A: Web search ────────────────────────────────────────────────────
+    async def web_search_theme():
+        try:
+            from engine.smart_theme_creator import create_theme_from_search
+            theme = await create_theme_from_search(
+                name        = req.name,
+                style       = req.style or req.name,
+                image_count = req.image_count,
+                extract_from_images = min(4, req.image_count),
+            )
+            theme['source']      = 'web_search'
+            theme['match_score'] = _score_theme_match(theme, req.name, req.style)
+            theme['palette_hex'] = theme.get('palette', [])
+            return {'ok': True, 'theme': theme}
+        except Exception as e:
+            logger.warning("[ThemeCompare] Web search path failed: %s", e)
+            return {'ok': False, 'error': str(e)}
+
+    # ── Path B: Uploaded image ────────────────────────────────────────────────
+    async def image_upload_theme():
+        if not req.image_b64:
+            return {'ok': False, 'error': 'no_image_provided'}
+        try:
+            import base64, io as _io
+            raw = req.image_b64
+            if ',' in raw:
+                mime_part, raw = raw.split(',', 1)
+            img_bytes = base64.b64decode(raw)
+            from PIL import Image as PILImage
+            img = PILImage.open(_io.BytesIO(img_bytes)).convert('RGB')
+
+            from engine.smart_theme_creator import (
+                extract_palette_from_image, build_theme_from_palette, score_palette
+            )
+            palette = extract_palette_from_image(img, n_colors=req.n_colors)
+
+            # Wallpaper
+            wallpaper_url = ''
+            if req.use_as_wallpaper:
+                import base64 as _b64
+                max_w = 1920
+                w, h = img.size
+                if w > max_w:
+                    img = img.resize((max_w, int(h * max_w / w)), PILImage.LANCZOS)
+                buf = _io.BytesIO()
+                img.save(buf, format='JPEG', quality=85, optimize=True)
+                wallpaper_url = f'data:image/jpeg;base64,{_b64.b64encode(buf.getvalue()).decode()}'
+
+            theme = build_theme_from_palette(
+                name             = req.name,
+                description      = req.style or f"Custom theme from uploaded image — {req.name}",
+                palette          = palette,
+                wallpaper_url    = wallpaper_url,
+                wallpaper_credit = f'Uploaded image — {req.name}',
+            )
+            theme['source']       = 'image_upload'
+            theme['palette_hex']  = [f'#{r:02x}{g:02x}{b:02x}' for r,g,b in palette]
+            theme['score']        = round(score_palette(palette), 1)
+            theme['match_score']  = _score_theme_match(theme, req.name, req.style)
+            theme['image_size']   = list(img.size)
+            if wallpaper_url:
+                theme['wallpapers'] = [{'url': wallpaper_url, 'credit': f'Uploaded — {req.name}', 'source': 'uploaded_image'}]
+            return {'ok': True, 'theme': theme}
+        except Exception as e:
+            logger.warning("[ThemeCompare] Image upload path failed: %s", e)
+            return {'ok': False, 'error': str(e)}
+
+    # Run both in parallel
+    web_task, img_task = await asyncio.gather(
+        web_search_theme(),
+        image_upload_theme(),
+        return_exceptions=False,
+    )
+
+    # Build comparison result
+    options = []
+    if web_task.get('ok') and web_task.get('theme'):
+        t = web_task['theme']
+        options.append({
+            'id':          'web',
+            'label':       '🌐 Web Search',
+            'description': f"Generated from {t.get('images_found', 0)} web images matching \"{req.name}\"",
+            'theme':       t,
+            'match_score': t.get('match_score', 0),
+            'wallpaper_count': len(t.get('wallpapers', [])),
+        })
+
+    if img_task.get('ok') and img_task.get('theme'):
+        t = img_task['theme']
+        options.append({
+            'id':          'image',
+            'label':       '🖼 Your Image',
+            'description': f"Extracted from uploaded image — {len(t.get('palette_hex', []))} colors",
+            'theme':       t,
+            'match_score': t.get('match_score', 0),
+            'wallpaper_count': 1 if t.get('wallpapers') else 0,
+        })
+
+    # Sort by match score — best first
+    options.sort(key=lambda o: o['match_score'], reverse=True)
+
+    # Winner determination
+    winner_id = options[0]['id'] if options else None
+
+    return {
+        'ok':           True,
+        'name':         req.name,
+        'style':        req.style,
+        'options':      options,
+        'winner':       winner_id,
+        'web_error':    web_task.get('error') if not web_task.get('ok') else None,
+        'image_error':  img_task.get('error') if not img_task.get('ok') else None,
+    }
