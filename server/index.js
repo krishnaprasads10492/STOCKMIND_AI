@@ -14,7 +14,7 @@ import { initEncryption, existsSecure } from './storage/fileStore.js'
 import { initAuditLog, auditLog, verifyAuditChain, queryAuditLog, getAuditStats } from './storage/auditLog.js'
 import { DB } from './storage/dbAdapter.js'
 import { createUser, loadPersistedSessions } from './services/authService.js'
-import { ADMIN_BUNDLE, APP_ID, APP_SALT } from './config/embedded-admin.js'
+import superadminUnlockRoutes from './routes/superadminUnlock.js'
 import authRoutes          from './routes/auth.js'
 import userRoutes          from './routes/users.js'
 import predictionRoutes    from './routes/predictions.js'
@@ -74,79 +74,43 @@ async function initSecurity() {
   }
 }
 
-// ── Credential decryption ─────────────────────────────────────────────────────
-// Decrypts the embedded admin bundle using the stable app-level key.
-// Works on every system — key is derived from constants, not machine-specific.
-function decryptBundle() {
-  try {
-    if (!ADMIN_BUNDLE?.data) return null
-    const key      = crypto.pbkdf2Sync(APP_ID, APP_SALT, 100_000, 32, 'sha512')
-    const [ivHex, tagHex, cipherHex] = ADMIN_BUNDLE.data.split(':')
-    const decipher = crypto.createDecipheriv(
-      'aes-256-gcm',
-      key,
-      Buffer.from(ivHex, 'hex')
-    )
-    decipher.setAuthTag(Buffer.from(tagHex, 'hex'))
-    const plain = Buffer.concat([
-      decipher.update(Buffer.from(cipherHex, 'hex')),
-      decipher.final(),
-    ]).toString('utf8')
-    return JSON.parse(plain)
-  } catch (e) {
-    console.warn('[bootstrap] Bundle decryption failed — using fallback:', e.message)
-    return null
-  }
-}
-
-// ── Bootstrap from embedded bundle → seed files → minimal default ─────────────
+// ── Bootstrap — create default accounts on first run ─────────────────────────
+// Superadmin is NOT created here. It is created on-demand via:
+//   http://localhost:4098/superadmin-unlock  (passphrase-protected)
+// This ensures superadmin credentials NEVER travel with the app — only
+// the admin.vault file (useless without your passphrase) does.
 async function bootstrap() {
   if (existsSecure('users/index')) return // users already exist
 
-  // Priority 1: encrypted bundle embedded in the app (portable across all systems)
-  let seeds = decryptBundle()
-  let source = 'encrypted bundle (embedded-admin.js)'
+  // Create a regular admin account so the app is usable by others
+  // Superadmin unlocks separately via /superadmin-unlock
+  const seedPath    = path.resolve(__dirname, '../users-seed.json')
+  const examplePath = path.resolve(__dirname, '../users-seed.example.json')
 
-  // Priority 2: users-seed.json (local override — for one-off customisation)
-  if (!seeds) {
-    const seedPath = path.resolve(__dirname, '../users-seed.json')
-    if (fs.existsSync(seedPath)) {
-      try { seeds = JSON.parse(fs.readFileSync(seedPath, 'utf8')); source = 'users-seed.json' }
-      catch (e) { console.warn('[bootstrap] users-seed.json parse error:', e.message) }
+  // Only seed non-superadmin users from seed files
+  let seeds = null
+  for (const p of [seedPath, examplePath]) {
+    if (fs.existsSync(p)) {
+      try {
+        const parsed = JSON.parse(fs.readFileSync(p, 'utf8'))
+        // Filter out super-admin — that role is vault-only
+        seeds = parsed.filter(u => u.role !== 'super-admin')
+        if (seeds.length > 0) break
+      } catch {}
     }
   }
 
-  // Priority 3: users-seed.example.json
-  if (!seeds) {
-    const exPath = path.resolve(__dirname, '../users-seed.example.json')
-    if (fs.existsSync(exPath)) {
-      try { seeds = JSON.parse(fs.readFileSync(exPath, 'utf8')); source = 'users-seed.example.json' }
-      catch (e) { console.warn('[bootstrap] users-seed.example.json parse error:', e.message) }
-    }
+  if (!seeds || seeds.length === 0) {
+    seeds = [{ username: 'admin', password: 'Admin@1234', role: 'admin' }]
   }
 
-  // Priority 4: fallback from bundle hint
-  if (!seeds && ADMIN_BUNDLE?.fallback) {
-    seeds = [ADMIN_BUNDLE.fallback]
-    source = 'built-in fallback'
-  }
-
-  // Priority 5: absolute minimum default
-  if (!seeds) {
-    seeds  = [{ username: 'admin', password: 'Admin@1234', role: 'admin' }]
-    source = 'hardcoded default'
-  }
-
-  console.log(`[bootstrap] Seeding ${seeds.length} user(s) from: ${source}`)
+  console.log(`[bootstrap] Creating ${seeds.length} account(s)...`)
   for (const seed of seeds) {
     const result = await createUser(seed, 'seed')
-    if (result.ok) {
-      console.log(`[bootstrap] ✓ Created: ${seed.username} (${seed.role})`)
-    } else {
-      console.warn(`[bootstrap] ✗ ${seed.username}: ${result.error}`)
-    }
+    if (result.ok) console.log(`[bootstrap] ✓ Created: ${seed.username} (${seed.role})`)
+    else console.warn(`[bootstrap] ✗ ${seed.username}: ${result.error}`)
   }
-  console.log('[bootstrap] Done. Run: npm run keygen <username>')
+  console.log('[bootstrap] Done. Superadmin: visit /superadmin-unlock in your browser.')
 }
 
 // ── Express app ───────────────────────────────────────────────────────────────
@@ -269,6 +233,7 @@ app.use('/api/configurator',   configuratorRoutes)
 app.use('/api/strategy-ai',   strategyAIRoutes)
 app.use('/api/doc-intel',     docIntelRoutes)
 app.use('/api/multi-level',   docIntelRoutes)
+app.use('/api/superadmin',    superadminUnlockRoutes)
 
 // ── Audit log routes (admin only) ─────────────────────────────────────────────
 app.get('/api/audit/stats',  (req, res) => res.json(getAuditStats()))

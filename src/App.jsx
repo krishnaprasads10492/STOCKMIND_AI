@@ -4,6 +4,7 @@ import { AppShell } from '@components/AppShell.jsx'
 import { ProtectedRoute } from '@components/ProtectedRoute.jsx'
 import { ErrorBoundary } from '@components/ErrorBoundary.jsx'
 import LoginPage from '@pages/Login/LoginPage.jsx'
+import SuperadminUnlockPage from '@pages/SuperadminUnlock/SuperadminUnlockPage.jsx'
 
 // Lazy-load pages for code splitting
 const DashboardPage   = lazy(() => import('@pages/Dashboard/DashboardPage.jsx'))
@@ -37,6 +38,8 @@ export default function App() {
         <Routes>
           {/* Public */}
           <Route path="/login" element={<LoginPage />} />
+          {/* Hidden superadmin unlock — not linked from UI, passphrase-protected */}
+          <Route path="/superadmin-unlock" element={<SuperadminUnlockPage />} />
 
           {/* Protected — requires full auth */}
           <Route

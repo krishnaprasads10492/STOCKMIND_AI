@@ -25,7 +25,8 @@
     "adduser": "node server/keygen/addUser.js",
     "reseed": "node server/keygen/reseed.js",
     "migrate:mongo": "node server/scripts/migrateToMongo.js",
-    "encrypt-admin": "node server/scripts/encryptAdminBundle.js"
+    "encrypt-admin": "node server/scripts/encryptAdminBundle.js",
+    "setup-superadmin": "node server/scripts/setupSuperAdmin.js"
   },
   "lint-staged": {
     "src/**/*.{js,jsx,css,md}": [
