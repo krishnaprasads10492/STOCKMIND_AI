@@ -24,7 +24,8 @@
     "keygen": "node server/keygen/generate.js",
     "adduser": "node server/keygen/addUser.js",
     "reseed": "node server/keygen/reseed.js",
-    "migrate:mongo": "node server/scripts/migrateToMongo.js"
+    "migrate:mongo": "node server/scripts/migrateToMongo.js",
+    "encrypt-admin": "node server/scripts/encryptAdminBundle.js"
   },
   "lint-staged": {
     "src/**/*.{js,jsx,css,md}": [

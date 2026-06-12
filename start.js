@@ -831,6 +831,22 @@ async function main() {
   const isFirstRun = !existsSync(join(__dirname, 'data', 'system', 'version-probe.json'))
   if (isFirstRun || doProbe) {
     info(isFirstRun ? 'First run — probing registries for optimal package versions...' : 'Manual version probe...')
+
+    // First-run: explain credential behaviour
+    if (isFirstRun) {
+      const seedExists  = existsSync(join(__dirname, 'users-seed.json'))
+      const exampleExists = existsSync(join(__dirname, 'users-seed.example.json'))
+      if (seedExists) {
+        ok('users-seed.json found — your super-admin credentials will be created from it.')
+      } else if (exampleExists) {
+        ok('users-seed.example.json found — credentials will be seeded from the example file.')
+        info('To use your own credentials: edit users-seed.json before first run.')
+      } else {
+        warn('No seed file found — a default admin (admin / Admin@1234) will be created.')
+        warn('To set your own super-admin: create users-seed.json before the backend starts.')
+      }
+    }
+
     try { await probeVersions() } catch (e) { warn(`Version probe failed (non-fatal): ${e.message?.slice(0,60)}`) }
   }
 

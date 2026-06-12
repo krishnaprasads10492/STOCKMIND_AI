@@ -49,13 +49,27 @@ That's it. This one command:
 
 ### 1.3 What happens on first run
 
-On the very first startup, the backend **automatically creates users from `users-seed.json`**:
+On the very first startup, the backend **automatically creates users from `users-seed.json`** (or `users-seed.example.json` as fallback):
 
 ```
-[bootstrap] Seeding 1 user(s) from users-seed.json...
+[bootstrap] Seeding 2 user(s) from users-seed.json...
+[bootstrap] ✓ Created: Krishna.s (super-admin)
 [bootstrap] ✓ Created: admin (admin)
-[bootstrap] Done. Run: npm run keygen <username>
+[bootstrap] Done.
+[bootstrap] Run in a new terminal: npm run keygen <username>
 ```
+
+#### Credential portability — running on a new system
+
+`users-seed.json` is committed to git. When you clone the repo on a new machine, your super-admin credentials are already there. The app reads the seed file and creates the accounts automatically.
+
+| File | In git? | Purpose |
+|---|---|---|
+| `users-seed.json` | ✅ Yes | Your actual credentials — carried to every system |
+| `users-seed.example.json` | ✅ Yes | Template — used if `users-seed.json` is missing |
+| `data/` folder | ❌ No | Encrypted user records — created fresh on each system |
+
+> **First time on a new system**: clone → `node start.js --dev` → credentials created from seed → generate your 12-digit key → log in. That's it.
 
 ---
 

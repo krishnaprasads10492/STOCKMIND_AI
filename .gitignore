@@ -29,8 +29,11 @@ data/
 !data/.gitkeep
 
 # ── User credentials seed ─────────────────────────────────────────────────────
-# Contains plaintext passwords — never commit
-users-seed.json
+# users-seed.json IS committed — this is a personal local-only app.
+# It carries your super-admin credentials to any new system you clone to.
+# users-seed.example.json is the template (always in git).
+# If you want a private seed, add users-seed.json to your local .git/info/exclude
+# instead of .gitignore so it stays out of the repo without affecting others.
 
 # ── JARVIS backups ────────────────────────────────────────────────────────────
 .jarvis_backups/
