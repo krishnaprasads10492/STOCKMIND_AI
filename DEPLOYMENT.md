@@ -10,7 +10,7 @@ After building (or receiving a distribution package), you will have:
 
 ```
 stockmind-ai/
-├── dist/               ← Built frontend (static files)
+├── build/              ← Built frontend (static files)
 ├── server/             ← Backend (Node.js — must be present)
 ├── data/               ← Encrypted data store (created on first run)
 ├── users-seed.json     ← User setup file (edit before first run)
@@ -113,7 +113,7 @@ Keep this terminal open. The backend must stay running while you use the app.
 
 ### Step 6 — Serve the frontend
 
-The `dist/` folder contains the built React app. You need a static file server to serve it.
+The `build/` folder contains the built React app. You need a static file server to serve it.
 
 **Option A — Use the included Express server to also serve the frontend:**
 
@@ -123,8 +123,8 @@ Add this to `server/index.js` (after the routes section):
 import { fileURLToPath } from 'url'
 import path from 'path'
 const __dirname2 = fileURLToPath(new URL('.', import.meta.url))
-app.use(express.static(path.join(__dirname2, '../dist')))
-app.get('*', (_req, res) => res.sendFile(path.join(__dirname2, '../dist/index.html')))
+app.use(express.static(path.join(__dirname2, '../build')))
+app.get('*', (_req, res) => res.sendFile(path.join(__dirname2, '../build/index.html')))
 ```
 
 Then open http://localhost:4098 in your browser.
@@ -194,7 +194,7 @@ npm install --legacy-peer-deps
 npm run build
 ```
 
-This creates the `dist/` folder. Then follow Option A above.
+This creates the `build/` folder. Then follow Option A above.
 
 ---
 
@@ -205,7 +205,7 @@ The cleanest setup is to have Express serve both the API and the static frontend
 ```js
 // Serve built frontend
 import { fileURLToPath } from 'url'
-const __staticDir = fileURLToPath(new URL('../dist', import.meta.url))
+const __staticDir = fileURLToPath(new URL('../build', import.meta.url))
 app.use(express.static(__staticDir))
 // SPA fallback — all non-API routes serve index.html
 app.get(/^(?!\/api).*/, (_req, res) => {
@@ -328,7 +328,7 @@ launchctl load ~/Library/LaunchAgents/com.stockmind.plist
 
 | File / Folder | Purpose | Edit? |
 |---|---|---|
-| `dist/` | Built frontend — do not edit | No |
+| `build/` | Built frontend — do not edit | No |
 | `server/` | Backend source | Only if customising |
 | `data/` | Encrypted user data + predictions | No — managed by app |
 | `users-seed.json` | Initial user setup | Yes — before first run |

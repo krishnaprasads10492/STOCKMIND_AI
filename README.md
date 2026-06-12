@@ -15,7 +15,7 @@ AI-powered stock market analysis, prediction, and portfolio intelligence platfor
 ```bash
 npm install
 npm run dev        # dev server on :3000
-npm run build      # production build → dist/
+npm run build      # production build → build/
 npm run preview    # preview production build locally
 npm run test       # run tests once
 npm run test:watch # run tests in watch mode

@@ -12,7 +12,7 @@
  *   7. Never breaks the host system — all fixes are app-scoped
  *
  * Usage:
- *   node start.js              Production (dist/ on :4098)
+ *   node start.js              Production (build/ on :4098)
  *   node start.js --dev        Development (Vite HMR on :4099)
  *   node start.js --build      Build frontend first, then start
  *   node start.js --no-ai      Skip Python AI backend
@@ -299,12 +299,12 @@ function installNodeDeps(reason = '') {
 async function checkFrontendBuild() {
   if (isDev) return true
 
-  const distHtml = join(__dirname, 'dist', 'index.html')
+  const distHtml = join(__dirname, 'build', 'index.html')
   if (!existsSync(distHtml) || doBuild) {
-    log('BUILD', C.cyan, `${doBuild ? 'Rebuilding' : 'No dist/ found — building'} frontend...`)
+    log('BUILD', C.cyan, `${doBuild ? 'Rebuilding' : 'No build/ found — building'} frontend...`)
     try {
       runInherit('npm run build', { cwd: __dirname })
-      ok('Frontend built → dist/ ✓')
+      ok('Frontend built → build/ ✓')
       return true
     } catch (e) {
       err(`Frontend build failed: ${e.message?.slice(0, 150)}`)
@@ -675,7 +675,7 @@ function runDiagnostics() {
   add('node_modules',  existsSync(join(__dirname, 'node_modules', 'express')), '')
   add('.env file',     existsSync(join(__dirname, '.env')), '')
   add('data/ dirs',    existsSync(join(__dirname, 'data', 'system')), '')
-  add('dist/ build',   existsSync(join(__dirname, 'dist', 'index.html')), isDev ? '(dev — not needed)' : '')
+  add('build/ folder',  existsSync(join(__dirname, 'build', 'index.html')), isDev ? '(dev — not needed)' : '')
 
   let pyCmd = null
   for (const cmd of ['python3', 'python']) {

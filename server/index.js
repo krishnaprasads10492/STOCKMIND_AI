@@ -49,7 +49,7 @@ import {
 } from './services/aiGrowthWorker.js'
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
-const DIST_DIR  = path.resolve(__dirname, '../dist')
+const DIST_DIR  = path.resolve(__dirname, '../build')
 const PORT = process.env.PORT ?? 4098
 
 // ── DATA_PASSWORD ─────────────────────────────────────────────────────────────
@@ -392,7 +392,7 @@ app.get('/api/growth-worker/events', (req, res) => {
 
 // ── Serve built frontend (production / no-source-code mode) ──────────────────
 // In dev mode Vite serves the frontend separately on :4098.
-// In production (dist/ exists), Express serves everything on one port.
+// In production (build/ exists), Express serves everything on one port.
 if (fs.existsSync(DIST_DIR)) {
   app.use(express.static(DIST_DIR))
   // SPA fallback — non-API routes serve index.html

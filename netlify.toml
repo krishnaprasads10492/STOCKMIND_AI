@@ -1,5 +1,5 @@
 [build]
-  publish = "dist"
+  publish = "build"
   command = "npm run build"
 
 [build.environment]
@@ -13,4 +13,4 @@
 [dev]
   command = "npm run dev"
   port = 3000
-  publish = "dist"
+  publish = "build"
