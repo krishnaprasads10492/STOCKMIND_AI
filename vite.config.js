@@ -176,7 +176,7 @@ export default defineConfig({
   },
 // OutDir will always be build.
   build: {
-    outDir:    'build',     
+    outDir:    'dist',     // must match the path start.js checks (dist/index.html)
     sourcemap: false,
     target:    ['es2020', 'chrome87', 'firefox78', 'safari14'],
     minify:    'esbuild',

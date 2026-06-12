@@ -34,6 +34,7 @@ import imageAnalysisRoutes from './routes/imageAnalysis.js'
 import configuratorRoutes  from './routes/configurator.js'
 import strategyAIRoutes    from './routes/strategyAI.js'
 import docIntelRoutes      from './routes/docIntel.js'
+import { AGI_DASHBOARD, SCENARIO_LIB, HEALTH_NOTES, VULN_SCANNER, SELF_UPDATE } from './services/sustainingSystem.js'
 import { startOutcomeValidator, getValidatorStatus, addSSEClient, startCleanupScheduler } from './services/outcomeValidator.js'
 import { rebuildAMIIndex } from './services/amiStore.js'
 import { rebuildPredictionIndex } from './services/predictionStore.js'
@@ -229,6 +230,50 @@ app.use('/api/multi-level',   docIntelRoutes)
 // ── Audit log routes (admin only) ─────────────────────────────────────────────
 app.get('/api/audit/stats',  (req, res) => res.json(getAuditStats()))
 app.get('/api/audit/verify', (req, res) => res.json(verifyAuditChain()))
+
+// ── AGI Health Dashboard — combines all sustaining systems ────────────────────
+app.get('/api/agi/dashboard', async (req, res) => {
+  try { res.json(await AGI_DASHBOARD.getFullStatus()) }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }) }
+})
+app.get('/api/agi/scenarios', (req, res) => {
+  res.json({ ok: true, scenarios: SCENARIO_LIB.getAll(), stats: SCENARIO_LIB.getStats() })
+})
+app.post('/api/agi/scenarios/record', (req, res) => {
+  const { error = '', context = '', fix = '', resolved = false } = req.body
+  if (!error) return res.status(400).json({ error: 'error field required' })
+  SCENARIO_LIB.record(error, context, fix, resolved)
+  res.json({ ok: true })
+})
+app.get('/api/agi/scenarios/lookup', (req, res) => {
+  const err = String(req.query.error ?? '')
+  if (!err) return res.status(400).json({ error: 'error query param required' })
+  res.json({ ok: true, ...SCENARIO_LIB.lookup(err) })
+})
+app.get('/api/agi/health-notes', (req, res) => {
+  const level = req.query.level ?? null
+  const n     = Math.min(Number(req.query.n ?? 50), 200)
+  res.json({ ok: true, notes: HEALTH_NOTES.getRecent(n, level) })
+})
+app.get('/api/agi/vulnerabilities', async (req, res) => {
+  try {
+    const force = req.query.force === 'true'
+    const data  = force ? await VULN_SCANNER.scanAll() : VULN_SCANNER.getCached()
+    res.json({ ok: true, ...data })
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }) }
+})
+app.post('/api/agi/consolidate', async (req, res) => {
+  try { res.json({ ok: true, ...(await AGI_DASHBOARD.consolidate()) }) }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }) }
+})
+app.get('/api/agi/git-status', (req, res) => {
+  res.json({ ok: true, ...SELF_UPDATE.getStatus() })
+})
+app.post('/api/agi/git-push', async (req, res) => {
+  const { message = 'auto-save', files = [] } = req.body
+  try { res.json(await SELF_UPDATE.commitAndPush(message, files)) }
+  catch (e) { res.status(500).json({ ok: false, error: e.message }) }
+})
 app.get('/api/audit/query',  (req, res) => {
   const { event, userId, limit = 100 } = req.query
   res.json(queryAuditLog({ event, userId, limit: Number(limit) }))

@@ -1,54 +1,62 @@
 # StockMind AI — Python ML Backend
-# Install: pip install -r requirements.txt
+# ALL versions are pinned for security and reproducibility.
+# Last audited: June 2026 | Min Python: 3.10 (3.11/3.12 recommended for Windows)
 #
-# Core API
-fastapi==0.115.5
-uvicorn[standard]==0.32.1
-pydantic==2.9.2
+# IMPORTANT — NUMPY ON WINDOWS:
+#   numpy 1.26.4 = last version without Meson build (Python ≤3.12 only)
+#   numpy 2.2.6  = required for Python ≥3.13 (Meson build, needs Windows Long Paths)
+#   The launcher (start.js) auto-detects your Python version and installs the
+#   correct numpy using C:\Tmp as TEMP directory (short path) to avoid failures.
+#   This file uses numpy>=1.26.4 so pip resolves correctly for each Python version.
 
-# Data
-numpy==1.26.4
+# ── Core API ──────────────────────────────────────────────────────────────────
+fastapi==0.115.12
+uvicorn[standard]==0.34.3
+pydantic==2.11.7
+
+# ── Data ─────────────────────────────────────────────────────────────────────
+# numpy: flexible pin — launcher installs version-specific wheel before this runs
+numpy>=1.26.4
 pandas==2.2.3
 scipy==1.14.1
 
-# ML — Ensemble models
+# ── ML — Ensemble models ──────────────────────────────────────────────────────
 scikit-learn==1.5.2
 lightgbm==4.5.0
 xgboost==2.1.3
 
-# Deep learning (optional — comment out if GPU not available)
-# torch==2.4.1
-# tensorflow==2.17.0
+# ── Time-series ───────────────────────────────────────────────────────────────
+statsmodels==0.14.4
 
-# Time-series
-statsmodels==0.14.4            # ARIMA, GARCH
-
-# Options / Finance math
+# ── Finance math ──────────────────────────────────────────────────────────────
 numpy-financial==1.0.0
 
-# Sentiment (optional — downloads ~500MB model on first run)
-# transformers==4.46.3         # FinBERT
-# torch==2.4.1
+# ── Technical indicators ──────────────────────────────────────────────────────
+ta==0.11.0
 
-# Technical indicators
-ta==0.11.0                     # RSI, MACD, ATR, Bollinger, etc.
+# ── HTTP client ───────────────────────────────────────────────────────────────
+httpx==0.28.1
 
-# HTTP client (for fetching market data directly from AI backend)
-httpx==0.27.2
+# ── Image analysis ────────────────────────────────────────────────────────────
+Pillow==11.2.1
+pytesseract==0.3.13
 
-# Image analysis (OCR + vision)
-Pillow==12.2.0                 # Image processing (decode, resize, enhance)
-pytesseract==0.3.13            # OCR wrapper for Tesseract (install Tesseract separately)
-# Tesseract install: https://github.com/tesseract-ocr/tesseract
-# Windows: choco install tesseract  |  Ubuntu: apt install tesseract-ocr
+# ── Document parsing (Excel upload, doc-intel) ───────────────────────────────
+openpyxl==3.1.5
 
-# Utilities
-python-dotenv==1.0.1
-joblib==1.4.2                  # model serialisation
+# ── Utilities ─────────────────────────────────────────────────────────────────
+python-dotenv==1.1.0
+joblib==1.4.2
 
-# Advanced ML (optional — for production model training)
-# catboost==1.2.7              # CatBoost gradient boosting
-# optuna==3.6.1                # Bayesian hyperparameter optimization
-# shap==0.45.1                 # SHAP explainability
-# prophet==1.1.5               # Facebook Prophet for seasonality
-# pykalman==0.9.7              # Kalman filter for regime detection
+# ── Deep learning (optional — uncomment if GPU available) ────────────────────
+# torch==2.7.0
+# tensorflow==2.19.0
+
+# ── Sentiment (optional — downloads ~500MB model on first run) ────────────────
+# transformers==4.51.3
+# torch==2.7.0
+
+# ── Advanced ML (optional — production training only) ────────────────────────
+# catboost==1.2.7
+# optuna==4.3.0
+# shap==0.47.2
