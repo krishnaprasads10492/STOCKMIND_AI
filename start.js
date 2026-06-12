@@ -185,6 +185,18 @@ function checkNodeVersion() {
     err('Impact: App will NOT start. No system changes made.')
     process.exit(1)
   }
+
+  // Vite 7 requires Node 20.19+ or 22.12+ (uses crypto.hash)
+  // We ship Vite 6 in package.json which supports Node 18+, but warn if outdated
+  const [major, minor] = parts
+  const isViте7Compat = (major === 20 && minor >= 19) || (major === 22 && minor >= 12) || major >= 23
+  if (!isViте7Compat) {
+    warn(`Node.js ${process.versions.node} detected.`)
+    warn('RECOMMENDED: Upgrade to Node.js v22 LTS for best compatibility.')
+    warn('Current version works with Vite 6 (pinned in package.json).')
+    warn('Download: https://nodejs.org/en/download')
+  }
+
   ok(`Node.js ${process.versions.node} ✓`)
 }
 
@@ -549,6 +561,12 @@ const ERROR_PATTERNS = [
   { re: /invalid.*env.*variable/i,     severity: 'warn',  fix: 'Invalid .env value — check .env file against .env.example' },
   { re: /argon2.*binding/i,            severity: 'error', fix: 'argon2 native binding failed — run: npm rebuild argon2' },
   { re: /ENOENT.*users-seed/i,         severity: 'warn',  fix: 'users-seed.json missing — default admin will be created' },
+  // New: crypto.hash + backtick path
+  { re: /crypto\.hash is not a function|crypto\.hash.*undefined/i,
+                                        severity: 'error', fix: 'Node.js too old for Vite 7. Upgrade to Node v22 LTS or run: npm install --legacy-peer-deps (Vite 6 is now in package.json)' },
+  { re: /backtick|`.*is not recognized/i,
+                                        severity: 'error', fix: 'Path contains backtick — move project to a path without special characters' },
+  { re: /spawn.*ENOENT.*vite/i,        severity: 'error', fix: 'Vite binary not found — run: npm install --legacy-peer-deps' },
 ]
 
 function detectError(line) {
@@ -563,15 +581,17 @@ function detectError(line) {
 
 const procs = []
 let backendCrashes = 0
+const exitedProcs = new Set()   // track which processes have exited with error
 
 function spawnProc(name, color, cmd, cmdArgs, opts = {}) {
-  const useShell = opts.shell !== undefined ? opts.shell : process.platform === 'win32'
-  const { shell: _, ...restOpts } = opts
+  // NEVER use shell:true — backticks/spaces in path break cmd.exe on Windows.
+  // Always pass binary as argv[0] with array args so the OS calls it directly.
+  const { shell: _ignored, ...restOpts } = opts
 
   const proc = spawn(cmd, cmdArgs, {
     cwd:   __dirname,
     env:   { ...process.env, FORCE_COLOR: '1', PYTHONUNBUFFERED: '1' },
-    shell: useShell,
+    shell: false,   // explicit: never shell — avoids backtick/space path issues
     ...restOpts,
   })
 
@@ -603,18 +623,31 @@ function spawnProc(name, color, cmd, cmdArgs, opts = {}) {
 
   proc.on('error', e => {
     err(`[${name}] Spawn error: ${e.message}`)
-    if (e.code === 'ENOENT') err(`  ↳ Command '${cmd}' not found in PATH`)
-    saveScenario(e.message.slice(0, 80), `Check that ${cmd} is installed and in PATH`, false)
+    if (e.code === 'ENOENT') {
+      err(`  ↳ '${cmd}' not found in PATH`)
+      if (name === 'VITE') err(`  ↳ Fix: npm install --legacy-peer-deps`)
+    }
+    exitedProcs.add(name)
+    saveScenario(e.message.slice(0, 80), `Check that ${cmd} is installed`, false)
   })
 
   proc.on('exit', (code, signal) => {
     if (code !== 0 && code !== null && signal !== 'SIGTERM') {
       err(`[${name}] Exited with code ${code}`)
+      exitedProcs.add(name)
+
+      if (name === 'VITE') {
+        err(`Vite failed to start (code ${code}).`)
+        warn('Diagnosing Vite failure...')
+        diagnoseViteFailure()
+      }
+
       if (name === 'BACKEND') {
         backendCrashes++
         if (backendCrashes <= 3) {
           warn(`Backend crash #${backendCrashes} — restarting in 2s...`)
           setTimeout(() => {
+            exitedProcs.delete('BACKEND')
             const entry = procs.find(p => p.name === 'BACKEND')
             if (entry) entry.proc = spawnProc('BACKEND', C.cyan, 'node', ['server/index.js'])
           }, 2000)
@@ -628,6 +661,42 @@ function spawnProc(name, color, cmd, cmdArgs, opts = {}) {
 
   procs.push({ name, proc })
   return proc
+}
+
+function diagnoseViteFailure() {
+  const nodeVer = process.versions.node.split('.').map(Number)
+  const [major, minor] = nodeVer
+
+  // crypto.hash() was added in Node 21.7.0 — Vite 7+ needs it
+  const hasCryptoHash = typeof require !== 'undefined'
+    ? (() => { try { return typeof require('crypto').hash === 'function' } catch { return false } })()
+    : (() => { try { const c = eval('require')('crypto'); return typeof c.hash === 'function' } catch { return false } })()
+
+  if (!hasCryptoHash || (major < 21 || (major === 21 && minor < 7))) {
+    err(`Node.js ${process.versions.node} is missing crypto.hash() (added in Node 21.7).`)
+    err('Vite 7.x requires Node 20.19+ or 22.12+. You have an older Node version.')
+    warn('Fix options (pick ONE):')
+    warn('  1. RECOMMENDED: Upgrade Node.js to v22 LTS → https://nodejs.org')
+    warn('  2. We have auto-downgraded Vite to 6.x in package.json (Node 18+ compatible)')
+    warn('     Run: npm install --legacy-peer-deps   then restart')
+    warn('Impact: Vite will NOT start until one of the above is done.')
+    saveScenario('crypto.hash is not a function', 'Upgrade Node to v22+ OR run npm install (Vite downgraded to 6.x)', false)
+  } else {
+    // Check for backtick in path
+    if (__dirname.includes('`')) {
+      err('Path contains a backtick (`). Windows cmd.exe treats it as a special character.')
+      err(`Current path: ${__dirname}`)
+      warn('Fix: Move the project to a path without backticks.')
+      warn('Example: C:\\Projects\\StockMind-AI\\  (no special chars)')
+      warn('Impact: Vite cannot start when the project is in a path with backtick.')
+      saveScenario('backtick in path', 'Move project to path without backtick or special chars', false)
+    } else {
+      warn('Vite exited unexpectedly. Check the error output above for details.')
+      warn('Common fixes:')
+      warn('  npm install --legacy-peer-deps   (missing or corrupt node_modules)')
+      warn('  Check vite.config.js for syntax errors')
+    }
+  }
 }
 
 function stopAll() {
@@ -808,14 +877,43 @@ async function main() {
 
   if (isDev) {
     log('VITE', C.blue, `Starting Vite on :${vitePort}...`)
-    const viteBin  = process.platform === 'win32'
-      ? join(__dirname, 'node_modules', '.bin', 'vite.cmd')
-      : join(__dirname, 'node_modules', '.bin', 'vite')
-    const viteExe  = existsSync(viteBin) ? viteBin : 'npx'
-    const viteArgs = existsSync(viteBin)
-      ? ['--port', String(vitePort), '--strictPort']
-      : ['vite', '--port', String(vitePort), '--strictPort']
-    spawnProc('VITE', C.blue, viteExe, viteArgs)
+
+    // Check for path issues before spawning
+    if (__dirname.includes('`')) {
+      err('Project path contains a backtick character: ' + __dirname)
+      err('This breaks Vite on Windows. Move the project to a path without special characters.')
+      warn('Example: C:\\Projects\\StockMind-AI')
+      warn('Vite will not be started. Open the URL below for the backend API only.')
+      exitedProcs.add('VITE')
+    } else {
+      // Resolve the Vite binary — use absolute path, never rely on shell PATH expansion
+      // shell: false means the OS exec()s the binary directly — no backtick/space issues
+      const viteJs = join(__dirname, 'node_modules', 'vite', 'bin', 'vite.js')
+      const viteCjs= join(__dirname, 'node_modules', 'vite', 'dist', 'node', 'cli.js')
+      let viteArgs
+
+      if (existsSync(viteJs)) {
+        // Invoke via `node <vite.js> --port N` — completely shell-independent
+        viteArgs = { cmd: process.execPath, args: [viteJs, '--port', String(vitePort), '--strictPort'] }
+      } else if (existsSync(viteCjs)) {
+        viteArgs = { cmd: process.execPath, args: [viteCjs, '--port', String(vitePort), '--strictPort'] }
+      } else {
+        // Absolute path to the .cmd / shell script — still shell: false via node array
+        const viteBin = process.platform === 'win32'
+          ? join(__dirname, 'node_modules', '.bin', 'vite.cmd')
+          : join(__dirname, 'node_modules', '.bin', 'vite')
+        if (existsSync(viteBin)) {
+          viteArgs = { cmd: process.platform === 'win32' ? 'cmd.exe' : viteBin,
+                       args: process.platform === 'win32'
+                         ? ['/d', '/c', viteBin, '--port', String(vitePort), '--strictPort']
+                         : ['--port', String(vitePort), '--strictPort'] }
+        } else {
+          viteArgs = { cmd: process.execPath, args: ['-e', 'require("vite/bin/vite")', '--port', String(vitePort)] }
+        }
+      }
+
+      spawnProc('VITE', C.blue, viteArgs.cmd, viteArgs.args, { shell: false })
+    }
   }
 
   if (aiReady) {
@@ -829,29 +927,73 @@ async function main() {
     }
   }
 
-  // ── Wait for readiness ─────────────────────────────────────────────────────
+  // ── Wait for readiness — check each process is actually alive before reporting ─
   const checks = [
-    waitForPort(backendPort, 25_000).then(r => log('BACKEND', r ? C.green : C.yellow, r ? `Ready → http://localhost:${backendPort}` : 'Slow — continuing')),
+    waitForPort(backendPort, 25_000).then(r => {
+      log('BACKEND', r ? C.green : C.yellow, r ? `Ready → http://localhost:${backendPort}` : 'Slow — continuing')
+    }),
   ]
-  if (isDev)  checks.push(waitForPort(vitePort, 25_000).then(r => {
-    if (!r) {
-      warn(`Vite on :${vitePort} not responding after 25s.`)
-      warn('Impact: Frontend may not load. Check Vite logs above for errors.')
-      warn('Common fixes: npm install --legacy-peer-deps | check vite.config.js')
-    } else { log('VITE', C.green, `Ready → http://localhost:${vitePort}`) }
-  }))
-  if (aiReady) checks.push(waitForPort(8001, 35_000).then(r => log('AI', r ? C.green : C.yellow, r ? 'Ready → http://localhost:8001' : 'Slow — JS engine active')))
+
+  if (isDev) {
+    if (exitedProcs.has('VITE')) {
+      // Vite already exited with error — skip port wait, show status accurately
+      checks.push(Promise.resolve())
+    } else {
+      checks.push(
+        waitForPort(vitePort, 25_000).then(r => {
+          if (!r || exitedProcs.has('VITE')) {
+            err(`Vite did NOT start successfully on :${vitePort}`)
+            warn('Check the Vite error output above for the exact cause.')
+            warn('Common fixes:')
+            warn('  → Upgrade Node.js to v22 LTS (fixes crypto.hash error)')
+            warn('  → npm install --legacy-peer-deps (fixes missing/corrupt modules)')
+            warn('  → Move project to a path without special chars (fixes backtick path)')
+            warn(`  → Backend API still works at http://localhost:${backendPort}/api`)
+          } else {
+            log('VITE', C.green, `Ready → http://localhost:${vitePort}`)
+          }
+        })
+      )
+    }
+  }
+
+  if (aiReady) {
+    checks.push(
+      waitForPort(8001, 35_000).then(r =>
+        log('AI', r ? C.green : C.yellow, r ? 'Ready → http://localhost:8001' : 'Slow — JS engine active')
+      )
+    )
+  }
+
   await Promise.all(checks)
 
-  const appUrl = isDev ? `http://localhost:${vitePort}` : `http://localhost:${backendPort}`
-  console.log(`\n${C.green}${C.bold}✓ All systems running${C.reset}
+  // ── Print accurate status banner ───────────────────────────────────────────
+  const viteOk   = !isDev || (!exitedProcs.has('VITE'))
+  const backendOk= !exitedProcs.has('BACKEND')
+  const allOk    = viteOk && backendOk
+  const appUrl   = (isDev && viteOk) ? `http://localhost:${vitePort}` : `http://localhost:${backendPort}`
+
+  if (allOk) {
+    console.log(`\n${C.green}${C.bold}✓ All systems running${C.reset}
 
   ${C.cyan}${C.bold}Open: ${appUrl}${C.reset}
 
   ${C.dim}First time? New terminal: npm run keygen <username>
-  System health: ${appUrl.replace('4099', '4098')}/api/agi/dashboard
+  System health: http://localhost:${backendPort}/api/agi/dashboard
   Diagnostics:   node start.js --diagnose${C.reset}
 `)
+  } else {
+    const issues = []
+    if (!viteOk)    issues.push('Vite (frontend) failed to start — see errors above')
+    if (!backendOk) issues.push('Backend failed to start — see errors above')
+
+    console.log(`\n${C.yellow}${C.bold}⚠ Partial startup — ${issues.length} issue(s):${C.reset}`)
+    issues.forEach(i => console.log(`  ${C.red}✗${C.reset}  ${i}`))
+    console.log(`
+  ${C.cyan}Backend API: http://localhost:${backendPort}/api/health${C.reset}
+  ${C.dim}Fix the errors above and run: node start.js --dev${C.reset}
+`)
+  }
 }
 
 main().catch(e => { err(`Fatal startup error: ${e.message}`); saveScenario(e.message?.slice(0,80) ?? 'startup crash', 'Check error above — restart to retry auto-fix', false); process.exit(1) })

@@ -3,6 +3,16 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import { fileURLToPath } from 'url'
 import path from 'path'
+import crypto from 'crypto'
+
+// ── Node version compatibility polyfill ───────────────────────────────────────
+// Vite 6 uses crypto.hash() which was added in Node 21.7.
+// For Node 18–21.6 we polyfill it so the config loads without crashing.
+if (typeof crypto.hash !== 'function') {
+  crypto.hash = (algorithm, data, outputEncoding = 'hex') => {
+    return crypto.createHash(algorithm).update(data).digest(outputEncoding)
+  }
+}
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 
