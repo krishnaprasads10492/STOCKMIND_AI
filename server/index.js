@@ -15,6 +15,7 @@ import { initAuditLog, auditLog, verifyAuditChain, queryAuditLog, getAuditStats 
 import { DB } from './storage/dbAdapter.js'
 import { createUser, loadPersistedSessions } from './services/authService.js'
 import superadminUnlockRoutes from './routes/superadminUnlock.js'
+import docUpgradeRoutes       from './routes/docUpgrade.js'
 import authRoutes          from './routes/auth.js'
 import userRoutes          from './routes/users.js'
 import predictionRoutes    from './routes/predictions.js'
@@ -234,6 +235,7 @@ app.use('/api/strategy-ai',   strategyAIRoutes)
 app.use('/api/doc-intel',     docIntelRoutes)
 app.use('/api/multi-level',   docIntelRoutes)
 app.use('/api/superadmin',    superadminUnlockRoutes)
+app.use('/api/doc-upgrade',  docUpgradeRoutes)
 
 // ── Audit log routes (admin only) ─────────────────────────────────────────────
 app.get('/api/audit/stats',  (req, res) => res.json(getAuditStats()))

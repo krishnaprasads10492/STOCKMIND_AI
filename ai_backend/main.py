@@ -2483,3 +2483,111 @@ async def jarvis_theme_compare(req: ThemeCompareRequest):
         'web_error':    web_task.get('error') if not web_task.get('ok') else None,
         'image_error':  img_task.get('error') if not img_task.get('ok') else None,
     }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Doc Upgrade Analyser — tech doc → change proposals
+# ─────────────────────────────────────────────────────────────────────────────
+
+from engine.doc_upgrade_analyser import get_doc_analyser
+
+
+@app.post("/doc-upgrade/analyse")
+async def doc_upgrade_analyse(body: dict):
+    """
+    Analyse a tech document and generate change proposals.
+    Body: { doc_text, doc_name, provider_id }
+    """
+    doc_text    = str(body.get('doc_text', ''))
+    doc_name    = str(body.get('doc_name', 'uploaded_doc'))
+    provider_id = str(body.get('provider_id', 'unknown'))
+
+    if not doc_text.strip():
+        return {'ok': False, 'error': 'doc_text required'}
+
+    analyser = get_doc_analyser()
+
+    # Use JARVIS brain as AI caller if available
+    async def ai_caller(prompt: str) -> str:
+        try:
+            result = await JARVIS_BRAIN.cloud_ai.chat(
+                [{'role': 'user', 'content': prompt}],
+                context='You are a senior software engineer. Return ONLY valid JSON.',
+                max_tokens=4000,
+            )
+            return result.get('content', '')
+        except Exception as e:
+            logger.warning("[DocUpgrade] AI call failed: %s", e)
+            return ''
+
+    proposal_set = await analyser.analyse_doc(
+        doc_text    = doc_text,
+        doc_name    = doc_name,
+        provider_id = provider_id,
+        ai_caller   = ai_caller,
+    )
+
+    # Serialize proposals
+    from dataclasses import asdict
+    return {
+        'ok':         True,
+        'set_id':     proposal_set.set_id,
+        'doc_name':   proposal_set.doc_name,
+        'doc_type':   proposal_set.doc_type,
+        'provider_id':proposal_set.provider_id,
+        'summary':    proposal_set.summary,
+        'proposals':  [asdict(p) for p in proposal_set.proposals],
+        'total':      len(proposal_set.proposals),
+    }
+
+
+@app.get("/doc-upgrade/sets")
+def doc_upgrade_list():
+    """List all active proposal sets."""
+    return {'ok': True, 'sets': get_doc_analyser().get_all_sets()}
+
+
+@app.get("/doc-upgrade/set/{set_id}")
+def doc_upgrade_get_set(set_id: str):
+    """Get full details of a proposal set."""
+    from dataclasses import asdict
+    ps = get_doc_analyser().get_set(set_id)
+    if not ps:
+        return {'ok': False, 'error': 'Set not found'}
+    return {
+        'ok':       True,
+        'set_id':   ps.set_id,
+        'doc_name': ps.doc_name,
+        'provider_id': ps.provider_id,
+        'summary':  ps.summary,
+        'status':   ps.status,
+        'proposals':[asdict(p) for p in ps.proposals],
+    }
+
+
+@app.post("/doc-upgrade/decide")
+def doc_upgrade_decide(body: dict):
+    """
+    Apply user approve/reject decisions to proposals.
+    Body: { set_id, decisions: {proposal_id: 'approved'|'rejected'} }
+    Returns the combination resolution — what's safe to apply.
+    """
+    set_id    = str(body.get('set_id', ''))
+    decisions = body.get('decisions', {})
+    if not set_id:
+        return {'ok': False, 'error': 'set_id required'}
+    return get_doc_analyser().apply_decisions(set_id, decisions)
+
+
+@app.post("/doc-upgrade/resolve-combination")
+def doc_upgrade_resolve(body: dict):
+    """
+    Re-run combination resolution for a set (after decision changes).
+    """
+    from dataclasses import asdict
+    set_id = str(body.get('set_id', ''))
+    ps = get_doc_analyser().get_set(set_id)
+    if not ps:
+        return {'ok': False, 'error': 'Set not found'}
+    resolution = get_doc_analyser().combo_engine.resolve(ps.proposals)
+    return {'ok': True, 'resolution': resolution}

@@ -274,6 +274,13 @@ export function AppShell() {
                 <span className={styles.navIcon} aria-hidden="true">🔌</span>
                 <span className={styles.navLabel}>Configurator</span>
               </NavLink>
+              <NavLink
+                to="/doc-upgrade"
+                className={({ isActive }) => `${styles.navItem} ${isActive ? styles.navActive : ''}`}
+              >
+                <span className={styles.navIcon} aria-hidden="true">📄</span>
+                <span className={styles.navLabel}>Doc Upgrade</span>
+              </NavLink>
             </>
           )}
         </nav>
