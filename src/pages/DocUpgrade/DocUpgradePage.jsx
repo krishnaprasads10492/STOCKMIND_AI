@@ -9,124 +9,230 @@
  * → Apply button patches files, runs tests, commits to git
  */
 
-import { useState, useRef, useCallback } from 'react'
-import { apiFetch } from '@services/apiClient.js'
-import { Disclaimer } from '@components/Disclaimer.jsx'
-import styles from './DocUpgradePage.module.css'
+import { useState, useRef, useCallback } from 'react';
+import { apiFetch } from '@services/apiClient.js';
+import { Disclaimer } from '@components/Disclaimer.jsx';
+import styles from './DocUpgradePage.module.css';
+
+// ── Web search for tech docs ──────────────────────────────────────────────────
+async function searchWebForDocs(query) {
+  // Uses DuckDuckGo Instant Answer API — no key needed
+  try {
+    const q = encodeURIComponent(`${query} API documentation changelog`);
+    const res = await fetch(
+      `https://api.duckduckgo.com/?q=${q}&format=json&no_html=1&skip_disambig=1`,
+      { signal: AbortSignal.timeout(8000) }
+    );
+    if (!res.ok) return [];
+    const data = await res.json();
+    const results = [];
+    if (data.AbstractText)
+      results.push({
+        title: data.Heading,
+        snippet: data.AbstractText,
+        url: data.AbstractURL,
+        source: 'DuckDuckGo',
+      });
+    if (data.RelatedTopics) {
+      data.RelatedTopics.slice(0, 4).forEach((t) => {
+        if (t.Text)
+          results.push({
+            title: t.Text.slice(0, 60),
+            snippet: t.Text,
+            url: t.FirstURL,
+            source: 'DuckDuckGo',
+          });
+      });
+    }
+    return results.slice(0, 5);
+  } catch {
+    return [];
+  }
+}
 
 const PROVIDERS = [
-  { id: 'openai',     label: 'OpenAI' },
-  { id: 'anthropic',  label: 'Anthropic' },
-  { id: 'gemini',     label: 'Google Gemini' },
-  { id: 'groq',       label: 'Groq' },
-  { id: 'xai',        label: 'xAI Grok' },
-  { id: 'deepseek',   label: 'DeepSeek' },
-  { id: 'mistral',    label: 'Mistral' },
-  { id: 'mongodb',    label: 'MongoDB' },
-  { id: 'postgres',   label: 'PostgreSQL' },
-  { id: 'zerodha',    label: 'Zerodha' },
-  { id: 'finnhub',    label: 'Finnhub' },
-  { id: 'newsapi',    label: 'NewsAPI' },
-  { id: 'other',      label: 'Other…' },
-]
+  { id: 'openai', label: 'OpenAI' },
+  { id: 'anthropic', label: 'Anthropic' },
+  { id: 'gemini', label: 'Google Gemini' },
+  { id: 'groq', label: 'Groq' },
+  { id: 'xai', label: 'xAI Grok' },
+  { id: 'deepseek', label: 'DeepSeek' },
+  { id: 'mistral', label: 'Mistral' },
+  { id: 'mongodb', label: 'MongoDB' },
+  { id: 'postgres', label: 'PostgreSQL' },
+  { id: 'zerodha', label: 'Zerodha' },
+  { id: 'finnhub', label: 'Finnhub' },
+  { id: 'newsapi', label: 'NewsAPI' },
+  { id: 'other', label: 'Other…' },
+];
 
-const EFFORT_COLOR = { low: 'var(--color-bull)', medium: 'var(--color-warn)', high: 'var(--color-bear)' }
-const PRIORITY_COLOR = { critical: 'var(--color-bear)', high: 'var(--color-warn)', medium: 'var(--color-accent)', low: 'var(--color-text-muted)' }
-const CATEGORY_ICON  = { schema: '📋', ui: '🎨', api: '🔌', db: '🗄', dependency: '📦', test: '🧪' }
+const EFFORT_COLOR = {
+  low: 'var(--color-bull)',
+  medium: 'var(--color-warn)',
+  high: 'var(--color-bear)',
+};
+const PRIORITY_COLOR = {
+  critical: 'var(--color-bear)',
+  high: 'var(--color-warn)',
+  medium: 'var(--color-accent)',
+  low: 'var(--color-text-muted)',
+};
+const CATEGORY_ICON = {
+  schema: '📋',
+  ui: '🎨',
+  api: '🔌',
+  db: '🗄',
+  dependency: '📦',
+  test: '🧪',
+};
 
 export default function DocUpgradePage() {
-  const fileRef = useRef(null)
-  const [file,        setFile]        = useState(null)
-  const [docText,     setDocText]     = useState('')
-  const [provider,    setProvider]    = useState('openai')
-  const [loading,     setLoading]     = useState(false)
-  const [proposals,   setProposals]   = useState(null)
-  const [setId,       setSetId]       = useState(null)
-  const [summary,     setSummary]     = useState('')
-  const [decisions,   setDecisions]   = useState({})   // {id: 'approved'|'rejected'}
-  const [resolution,  setResolution]  = useState(null)
-  const [applying,    setApplying]    = useState(false)
-  const [applyResult, setApplyResult] = useState(null)
-  const [error,       setError]       = useState(null)
-  const [activeProposal, setActiveProposal] = useState(null)
+  const fileRef = useRef(null);
+  const [file, setFile] = useState(null);
+  const [docText, setDocText] = useState('');
+  const [provider, setProvider] = useState('openai');
+  const [loading, setLoading] = useState(false);
+  const [proposals, setProposals] = useState(null);
+  const [setId, setSetId] = useState(null);
+  const [summary, setSummary] = useState('');
+  const [decisions, setDecisions] = useState({});
+  const [resolution, setResolution] = useState(null);
+  const [applying, setApplying] = useState(false);
+  const [applyResult, setApplyResult] = useState(null);
+  const [error, setError] = useState(null);
+  const [activeProposal, setActiveProposal] = useState(null);
+  // Web search state
+  const [webQuery, setWebQuery] = useState('');
+  const [webLoading, setWebLoading] = useState(false);
+  const [webResults, setWebResults] = useState([]);
+  const [showWebPanel, setShowWebPanel] = useState(false);
 
   const handleFile = useCallback((f) => {
-    if (!f) return
-    setFile(f)
-    setError(null)
-    setProposals(null)
-    setApplyResult(null)
-  }, [])
+    if (!f) return;
+    setFile(f);
+    setError(null);
+    setProposals(null);
+    setApplyResult(null);
+  }, []);
+
+  const handleWebSearch = useCallback(async () => {
+    const q =
+      webQuery.trim() ||
+      `${PROVIDERS.find((p) => p.id === provider)?.label ?? provider} API`;
+    setWebLoading(true);
+    setWebResults([]);
+    const results = await searchWebForDocs(q);
+    setWebResults(results);
+    setWebLoading(false);
+    if (!showWebPanel) setShowWebPanel(true);
+  }, [webQuery, provider, showWebPanel]);
+
+  const handleUseWebResult = useCallback((result) => {
+    // Paste snippet as doc text and close web panel
+    setDocText((prev) =>
+      prev
+        ? `${prev}\n\n---\nSource: ${result.url}\n${result.snippet}`
+        : `Source: ${result.url}\n${result.snippet}`
+    );
+    setShowWebPanel(false);
+  }, []);
 
   const analyse = useCallback(async () => {
-    setLoading(true); setError(null); setProposals(null); setResolution(null); setApplyResult(null)
+    setLoading(true);
+    setError(null);
+    setProposals(null);
+    setResolution(null);
+    setApplyResult(null);
     try {
-      const form = new FormData()
-      form.append('provider_id', provider)
+      const form = new FormData();
+      form.append('provider_id', provider);
       if (file) {
-        form.append('file', file)
+        form.append('file', file);
       } else if (docText.trim()) {
-        form.append('doc_text', docText)
-        form.append('doc_name', 'pasted_text')
+        form.append('doc_text', docText);
+        form.append('doc_name', 'pasted_text');
       } else {
-        setError('Upload a file or paste doc text'); setLoading(false); return
+        setError('Upload a file or paste doc text');
+        setLoading(false);
+        return;
       }
 
       // Use fetch directly for multipart
       const r = await fetch('/api/doc-upgrade/analyse', {
         method: 'POST',
-        headers: { 'x-session-token': localStorage.getItem('sm_session') ?? '' },
+        headers: {
+          'x-session-token': localStorage.getItem('sm_session') ?? '',
+        },
         body: form,
-      })
-      const data = await r.json()
-      if (!data.ok) throw new Error(data.error ?? 'Analysis failed')
+      });
+      const data = await r.json();
+      if (!data.ok) throw new Error(data.error ?? 'Analysis failed');
 
-      setProposals(data.proposals ?? [])
-      setSetId(data.set_id)
-      setSummary(data.summary ?? '')
+      setProposals(data.proposals ?? []);
+      setSetId(data.set_id);
+      setSummary(data.summary ?? '');
       // Default: all pending
-      const d = {}
-      ;(data.proposals ?? []).forEach(p => { d[p.id] = 'pending' })
-      setDecisions(d)
-    } catch (e) { setError(e.message) }
-    finally { setLoading(false) }
-  }, [file, docText, provider])
+      const d = {};
+      (data.proposals ?? []).forEach((p) => {
+        d[p.id] = 'pending';
+      });
+      setDecisions(d);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [file, docText, provider]);
 
   const decide = useCallback((id, verdict) => {
-    setDecisions(prev => ({ ...prev, [id]: verdict }))
-  }, [])
+    setDecisions((prev) => ({ ...prev, [id]: verdict }));
+  }, []);
 
   const resolveCombo = useCallback(async () => {
-    if (!setId) return
+    if (!setId) return;
     // Send decisions to backend first
-    const decisionsToSend = {}
-    Object.entries(decisions).forEach(([id, v]) => { if (v !== 'pending') decisionsToSend[id] = v })
+    const decisionsToSend = {};
+    Object.entries(decisions).forEach(([id, v]) => {
+      if (v !== 'pending') decisionsToSend[id] = v;
+    });
 
     const dr = await apiFetch('/api/doc-upgrade/decide', {
       method: 'POST',
       body: JSON.stringify({ set_id: setId, decisions: decisionsToSend }),
-    }).then(r => r.json()).catch(() => null)
+    })
+      .then((r) => r.json())
+      .catch(() => null);
 
-    if (dr?.ok) setResolution(dr.resolution)
-    return dr
-  }, [setId, decisions])
+    if (dr?.ok) setResolution(dr.resolution);
+    return dr;
+  }, [setId, decisions]);
 
   const applyChanges = useCallback(async () => {
-    setApplying(true)
+    setApplying(true);
     try {
       // First push decisions
-      await resolveCombo()
+      await resolveCombo();
       const r = await apiFetch(`/api/doc-upgrade/apply/${setId}`, {
-        method: 'POST', body: JSON.stringify({}),
-      }).then(r => r.json())
-      setApplyResult(r)
-    } catch (e) { setError(e.message) }
-    finally { setApplying(false) }
-  }, [setId, resolveCombo])
+        method: 'POST',
+        body: JSON.stringify({}),
+      }).then((r) => r.json());
+      setApplyResult(r);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setApplying(false);
+    }
+  }, [setId, resolveCombo]);
 
-  const approvedCount = Object.values(decisions).filter(v => v === 'approved').length
-  const rejectedCount = Object.values(decisions).filter(v => v === 'rejected').length
-  const pendingCount  = Object.values(decisions).filter(v => v === 'pending').length
+  const approvedCount = Object.values(decisions).filter(
+    (v) => v === 'approved'
+  ).length;
+  const rejectedCount = Object.values(decisions).filter(
+    (v) => v === 'rejected'
+  ).length;
+  const pendingCount = Object.values(decisions).filter(
+    (v) => v === 'pending'
+  ).length;
 
   return (
     <div className={styles.page}>
@@ -134,9 +240,9 @@ export default function DocUpgradePage() {
         <div>
           <h1 className={styles.title}>📄 Doc-Driven Upgrade</h1>
           <p className={styles.subtitle}>
-            Upload a tech doc → AI compares it with current integration →
-            review each proposed change → approve/reject individually →
-            safe combination is applied automatically
+            Upload a tech doc → AI compares it with current integration → review
+            each proposed change → approve/reject individually → safe
+            combination is applied automatically
           </p>
         </div>
       </div>
@@ -145,35 +251,151 @@ export default function DocUpgradePage() {
       {!proposals && (
         <div className={styles.inputSection}>
           <div className={styles.providerRow}>
-            <label className={styles.label}>Which provider/resource is this doc for?</label>
-            <select className={styles.select} value={provider} onChange={e => setProvider(e.target.value)}>
-              {PROVIDERS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+            <label className={styles.label}>
+              Which provider/resource is this doc for?
+            </label>
+            <select
+              className={styles.select}
+              value={provider}
+              onChange={(e) => setProvider(e.target.value)}
+            >
+              {PROVIDERS.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.label}
+                </option>
+              ))}
             </select>
+            {/* Globe button — search web for latest docs */}
+            <div className={styles.webSearchArea}>
+              <input
+                className={styles.webQueryInput}
+                value={webQuery}
+                onChange={(e) => setWebQuery(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleWebSearch()}
+                placeholder={`Search web for ${PROVIDERS.find((p) => p.id === provider)?.label ?? provider} docs…`}
+              />
+              <button
+                className={`${styles.globeBtn} ${webLoading ? styles.globeBtnLoading : ''}`}
+                onClick={handleWebSearch}
+                disabled={webLoading}
+                title="Search internet for latest API docs / changelogs"
+                type="button"
+              >
+                {webLoading ? '⏳' : '🌐'}
+              </button>
+            </div>
           </div>
+
+          {/* Web search results panel */}
+          {showWebPanel && (
+            <div className={styles.webPanel}>
+              <div className={styles.webPanelHeader}>
+                <span className={styles.webPanelTitle}>
+                  🌐 Web Results — click to use as reference
+                </span>
+                <button
+                  className={styles.webPanelClose}
+                  onClick={() => setShowWebPanel(false)}
+                  type="button"
+                >
+                  ×
+                </button>
+              </div>
+              {webResults.length === 0 && !webLoading && (
+                <div className={styles.webPanelEmpty}>
+                  No results found. Try a more specific query.
+                </div>
+              )}
+              {webResults.map((r, i) => (
+                <div key={i} className={styles.webResult}>
+                  <div className={styles.webResultTitle}>{r.title}</div>
+                  <div className={styles.webResultSnippet}>
+                    {r.snippet?.slice(0, 200)}…
+                  </div>
+                  <div className={styles.webResultActions}>
+                    {r.url && (
+                      <a
+                        href={r.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={styles.webResultLink}
+                      >
+                        Open ↗
+                      </a>
+                    )}
+                    <button
+                      className={styles.webResultUse}
+                      onClick={() => handleUseWebResult(r)}
+                      type="button"
+                    >
+                      + Use as reference
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           <div className={styles.inputModes}>
             {/* File upload */}
-            <div className={`${styles.uploadBox} ${file ? styles.uploadBoxFilled : ''}`}
+            <div
+              className={`${styles.uploadBox} ${file ? styles.uploadBoxFilled : ''}`}
               onClick={() => fileRef.current?.click()}
-              onDragOver={e => e.preventDefault()}
-              onDrop={e => { e.preventDefault(); handleFile(e.dataTransfer.files?.[0]) }}>
-              {file
-                ? <><span className={styles.fileIcon}>📄</span><span className={styles.fileName}>{file.name}</span><span className={styles.fileSize}>{(file.size/1024).toFixed(0)} KB</span></>
-                : <><span className={styles.uploadIcon}>⬆</span><span className={styles.uploadTxt}>Drop or click to upload</span><span className={styles.uploadHint}>PDF · TXT · MD · JSON · HTML</span></>
-              }
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                handleFile(e.dataTransfer.files?.[0]);
+              }}
+            >
+              {file ? (
+                <>
+                  <span className={styles.fileIcon}>📄</span>
+                  <span className={styles.fileName}>{file.name}</span>
+                  <span className={styles.fileSize}>
+                    {(file.size / 1024).toFixed(0)} KB
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className={styles.uploadIcon}>⬆</span>
+                  <span className={styles.uploadTxt}>
+                    Drop or click to upload
+                  </span>
+                  <span className={styles.uploadHint}>
+                    PDF · TXT · MD · JSON · HTML
+                  </span>
+                </>
+              )}
             </div>
-            <input ref={fileRef} type="file" accept=".pdf,.txt,.md,.json,.html" style={{display:'none'}} onChange={e => handleFile(e.target.files?.[0])} />
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".pdf,.txt,.md,.json,.html"
+              style={{ display: 'none' }}
+              onChange={(e) => handleFile(e.target.files?.[0])}
+            />
 
             <div className={styles.orDivider}>— or paste text —</div>
 
-            <textarea className={styles.docTextArea} value={docText} onChange={e => setDocText(e.target.value)}
-              placeholder="Paste API documentation, changelog, SDK reference, or migration guide here…" rows={8} />
+            <textarea
+              className={styles.docTextArea}
+              value={docText}
+              onChange={(e) => setDocText(e.target.value)}
+              placeholder="Paste API documentation, changelog, SDK reference, or migration guide here…"
+              rows={8}
+            />
           </div>
 
           {error && <div className={styles.error}>⚠ {error}</div>}
 
-          <button className={styles.analyseBtn} onClick={analyse} disabled={loading || (!file && !docText.trim())}>
-            {loading ? '⏳ AI is analysing…' : '🔍 Analyse & Generate Proposals'}
+          <button
+            className={styles.analyseBtn}
+            onClick={analyse}
+            disabled={loading || (!file && !docText.trim())}
+          >
+            {loading
+              ? '⏳ AI is analysing…'
+              : '🔍 Analyse & Generate Proposals'}
           </button>
         </div>
       )}
@@ -185,16 +407,24 @@ export default function DocUpgradePage() {
           <div className={styles.analysisSummary}>
             <div className={styles.summaryText}>{summary}</div>
             <div className={styles.stats}>
-              <span className={styles.statTotal}>{proposals.length} proposals</span>
-              <span className={styles.statApproved}>✓ {approvedCount} approved</span>
-              <span className={styles.statRejected}>✗ {rejectedCount} rejected</span>
-              <span className={styles.statPending}>… {pendingCount} pending</span>
+              <span className={styles.statTotal}>
+                {proposals.length} proposals
+              </span>
+              <span className={styles.statApproved}>
+                ✓ {approvedCount} approved
+              </span>
+              <span className={styles.statRejected}>
+                ✗ {rejectedCount} rejected
+              </span>
+              <span className={styles.statPending}>
+                … {pendingCount} pending
+              </span>
             </div>
           </div>
 
           {/* Proposal cards */}
           <div className={styles.proposalList}>
-            {proposals.map(p => (
+            {proposals.map((p) => (
               <ProposalCard
                 key={p.id}
                 proposal={p}
@@ -203,7 +433,9 @@ export default function DocUpgradePage() {
                 onReject={() => decide(p.id, 'rejected')}
                 onReset={() => decide(p.id, 'pending')}
                 expanded={activeProposal === p.id}
-                onToggle={() => setActiveProposal(activeProposal === p.id ? null : p.id)}
+                onToggle={() =>
+                  setActiveProposal(activeProposal === p.id ? null : p.id)
+                }
                 allProposals={proposals}
               />
             ))}
@@ -211,8 +443,14 @@ export default function DocUpgradePage() {
 
           {/* Combination resolution */}
           <div className={styles.comboSection}>
-            <button className={styles.resolveBtn} onClick={resolveCombo} disabled={pendingCount > 0}>
-              {pendingCount > 0 ? `Decide all ${pendingCount} pending proposals first` : '⚖ Analyse Combination Safety'}
+            <button
+              className={styles.resolveBtn}
+              onClick={resolveCombo}
+              disabled={pendingCount > 0}
+            >
+              {pendingCount > 0
+                ? `Decide all ${pendingCount} pending proposals first`
+                : '⚖ Analyse Combination Safety'}
             </button>
 
             {resolution && <CombinationPanel resolution={resolution} />}
@@ -222,21 +460,36 @@ export default function DocUpgradePage() {
           {resolution && resolution.stats?.safe_to_apply > 0 && (
             <div className={styles.applySection}>
               <div className={styles.applyInfo}>
-                <span className={styles.applyCount}>{resolution.stats.safe_to_apply} change(s) ready to apply</span>
+                <span className={styles.applyCount}>
+                  {resolution.stats.safe_to_apply} change(s) ready to apply
+                </span>
                 <span className={styles.applyNote}>
                   A backup of every modified file is created before applying.
                   Changes are committed to git automatically.
                 </span>
               </div>
-              <button className={styles.applyBtn} onClick={applyChanges} disabled={applying}>
-                {applying ? '⏳ Applying changes…' : `🚀 Apply ${resolution.stats.safe_to_apply} Approved Change(s)`}
+              <button
+                className={styles.applyBtn}
+                onClick={applyChanges}
+                disabled={applying}
+              >
+                {applying
+                  ? '⏳ Applying changes…'
+                  : `🚀 Apply ${resolution.stats.safe_to_apply} Approved Change(s)`}
               </button>
             </div>
           )}
 
           {applyResult && <ApplyResultPanel result={applyResult} />}
 
-          <button className={styles.resetBtn} onClick={() => { setProposals(null); setFile(null); setDocText('') }}>
+          <button
+            className={styles.resetBtn}
+            onClick={() => {
+              setProposals(null);
+              setFile(null);
+              setDocText('');
+            }}
+          >
             ← Start over with a new document
           </button>
         </div>
@@ -244,27 +497,49 @@ export default function DocUpgradePage() {
 
       <Disclaimer compact />
     </div>
-  )
+  );
 }
 
 // ── ProposalCard ──────────────────────────────────────────────────────────────
 
-function ProposalCard({ proposal: p, decision, onApprove, onReject, onReset, expanded, onToggle, allProposals }) {
-  const depTitles = (p.requires ?? []).map(id => allProposals.find(x => x.id === id)?.title).filter(Boolean)
-  const confTitles= (p.conflicts?? []).map(id => allProposals.find(x => x.id === id)?.title).filter(Boolean)
+function ProposalCard({
+  proposal: p,
+  decision,
+  onApprove,
+  onReject,
+  onReset,
+  expanded,
+  onToggle,
+  allProposals,
+}) {
+  const depTitles = (p.requires ?? [])
+    .map((id) => allProposals.find((x) => x.id === id)?.title)
+    .filter(Boolean);
+  const confTitles = (p.conflicts ?? [])
+    .map((id) => allProposals.find((x) => x.id === id)?.title)
+    .filter(Boolean);
 
   return (
-    <div className={`${styles.card} ${styles[`decision_${decision}`]}`} role="article">
+    <div
+      className={`${styles.card} ${styles[`decision_${decision}`]}`}
+      role="article"
+    >
       {/* Card header */}
       <div className={styles.cardHeader}>
         <div className={styles.cardHeaderLeft}>
-          <span className={styles.catIcon} title={p.category}>{CATEGORY_ICON[p.category] ?? '📝'}</span>
+          <span className={styles.catIcon} title={p.category}>
+            {CATEGORY_ICON[p.category] ?? '📝'}
+          </span>
           <div>
             <div className={styles.cardTitle}>{p.title}</div>
             <div className={styles.cardMeta}>
-              <span style={{ color: PRIORITY_COLOR[p.priority] }}>{p.priority}</span>
+              <span style={{ color: PRIORITY_COLOR[p.priority] }}>
+                {p.priority}
+              </span>
               <span className={styles.dot}>·</span>
-              <span style={{ color: EFFORT_COLOR[p.effort] }}>effort: {p.effort}</span>
+              <span style={{ color: EFFORT_COLOR[p.effort] }}>
+                effort: {p.effort}
+              </span>
               <span className={styles.dot}>·</span>
               <span className={styles.provider}>{p.provider}</span>
             </div>
@@ -272,13 +547,36 @@ function ProposalCard({ proposal: p, decision, onApprove, onReject, onReset, exp
         </div>
 
         {/* Decision buttons */}
-        <div className={styles.decisionBtns} role="group" aria-label={`Decision for ${p.title}`}>
-          <button className={`${styles.approveBtn} ${decision === 'approved' ? styles.approveBtnActive : ''}`}
-            onClick={onApprove} aria-pressed={decision === 'approved'} type="button">✓ Approve</button>
-          <button className={`${styles.rejectBtn}  ${decision === 'rejected' ? styles.rejectBtnActive  : ''}`}
-            onClick={onReject}  aria-pressed={decision === 'rejected'} type="button">✗ Reject</button>
+        <div
+          className={styles.decisionBtns}
+          role="group"
+          aria-label={`Decision for ${p.title}`}
+        >
+          <button
+            className={`${styles.approveBtn} ${decision === 'approved' ? styles.approveBtnActive : ''}`}
+            onClick={onApprove}
+            aria-pressed={decision === 'approved'}
+            type="button"
+          >
+            ✓ Approve
+          </button>
+          <button
+            className={`${styles.rejectBtn}  ${decision === 'rejected' ? styles.rejectBtnActive : ''}`}
+            onClick={onReject}
+            aria-pressed={decision === 'rejected'}
+            type="button"
+          >
+            ✗ Reject
+          </button>
           {decision !== 'pending' && (
-            <button className={styles.resetBtn2} onClick={onReset} type="button" title="Reset to pending">↺</button>
+            <button
+              className={styles.resetBtn2}
+              onClick={onReset}
+              type="button"
+              title="Reset to pending"
+            >
+              ↺
+            </button>
           )}
         </div>
       </div>
@@ -288,21 +586,38 @@ function ProposalCard({ proposal: p, decision, onApprove, onReject, onReset, exp
 
       {/* Dependencies / conflicts warning */}
       {depTitles.length > 0 && (
-        <div className={styles.depWarning}>⚠ Requires: {depTitles.join(', ')}</div>
+        <div className={styles.depWarning}>
+          ⚠ Requires: {depTitles.join(', ')}
+        </div>
       )}
       {confTitles.length > 0 && (
-        <div className={styles.confWarning}>⚡ Conflicts with: {confTitles.join(', ')}</div>
+        <div className={styles.confWarning}>
+          ⚡ Conflicts with: {confTitles.join(', ')}
+        </div>
       )}
 
       {/* Expand for full detail */}
-      <button className={styles.expandBtn} onClick={onToggle} type="button" aria-expanded={expanded}>
+      <button
+        className={styles.expandBtn}
+        onClick={onToggle}
+        type="button"
+        aria-expanded={expanded}
+      >
         {expanded ? '▲ Hide detail' : '▼ Show BEFORE / AFTER / MERITS / RISKS'}
       </button>
 
       {expanded && (
         <div className={styles.detail}>
-          <DetailBlock label="📋 Before (current)" code={p.before} type="before" />
-          <DetailBlock label="✨ After (proposed)"  code={p.after}  type="after" />
+          <DetailBlock
+            label="📋 Before (current)"
+            code={p.before}
+            type="before"
+          />
+          <DetailBlock
+            label="✨ After (proposed)"
+            code={p.after}
+            type="after"
+          />
 
           <div className={styles.detailRow}>
             <div className={styles.merits}>
@@ -320,7 +635,9 @@ function ProposalCard({ proposal: p, decision, onApprove, onReject, onReset, exp
               <span className={styles.detailLabel}>📁 Files affected</span>
               <div className={styles.componentList}>
                 {p.components.map((c, i) => (
-                  <span key={i} className={styles.componentTag}>{c.file} → {c.section}</span>
+                  <span key={i} className={styles.componentTag}>
+                    {c.file} → {c.section}
+                  </span>
                 ))}
               </div>
             </div>
@@ -328,33 +645,45 @@ function ProposalCard({ proposal: p, decision, onApprove, onReject, onReset, exp
         </div>
       )}
     </div>
-  )
+  );
 }
 
 function DetailBlock({ label, code, type }) {
   return (
     <div className={`${styles.codeBlock} ${styles[`codeBlock_${type}`]}`}>
       <span className={styles.codeBlockLabel}>{label}</span>
-      <pre className={styles.codeBlockPre}><code>{code || '(none)'}</code></pre>
+      <pre className={styles.codeBlockPre}>
+        <code>{code || '(none)'}</code>
+      </pre>
     </div>
-  )
+  );
 }
 
 // ── CombinationPanel ──────────────────────────────────────────────────────────
 
 function CombinationPanel({ resolution }) {
-  const { safe_to_apply, skipped, warnings, stats } = resolution
+  const { safe_to_apply, skipped, warnings, stats } = resolution;
   return (
     <div className={styles.comboPanel}>
       <div className={styles.comboPanelHeader}>⚖ Combination Analysis</div>
 
       <div className={styles.comboStats}>
         <div className={styles.comboStat}>
-          <span className={styles.comboStatNum} style={{ color: 'var(--color-bull)' }}>{stats.safe_to_apply}</span>
+          <span
+            className={styles.comboStatNum}
+            style={{ color: 'var(--color-bull)' }}
+          >
+            {stats.safe_to_apply}
+          </span>
           <span className={styles.comboStatLbl}>Safe to apply</span>
         </div>
         <div className={styles.comboStat}>
-          <span className={styles.comboStatNum} style={{ color: 'var(--color-bear)' }}>{stats.skipped}</span>
+          <span
+            className={styles.comboStatNum}
+            style={{ color: 'var(--color-bear)' }}
+          >
+            {stats.skipped}
+          </span>
           <span className={styles.comboStatLbl}>Skipped</span>
         </div>
         <div className={styles.comboStat}>
@@ -365,12 +694,19 @@ function CombinationPanel({ resolution }) {
 
       {safe_to_apply?.length > 0 && (
         <div className={styles.safeList}>
-          <span className={styles.detailLabel}>Will be applied (in order):</span>
+          <span className={styles.detailLabel}>
+            Will be applied (in order):
+          </span>
           {safe_to_apply.map((p, i) => (
             <div key={p.id} className={styles.safeItem}>
               <span className={styles.safeIdx}>{i + 1}</span>
               <span>{p.title}</span>
-              <span className={styles.safeEffort} style={{ color: EFFORT_COLOR[p.effort] }}>{p.effort}</span>
+              <span
+                className={styles.safeEffort}
+                style={{ color: EFFORT_COLOR[p.effort] }}
+              >
+                {p.effort}
+              </span>
             </div>
           ))}
         </div>
@@ -378,8 +714,10 @@ function CombinationPanel({ resolution }) {
 
       {skipped?.length > 0 && (
         <div className={styles.skippedList}>
-          <span className={styles.detailLabel}>Skipped (dependency rejected):</span>
-          {skipped.map(s => (
+          <span className={styles.detailLabel}>
+            Skipped (dependency rejected):
+          </span>
+          {skipped.map((s) => (
             <div key={s.proposal?.id} className={styles.skippedItem}>
               ✗ {s.proposal?.title} — <em>{s.reason}</em>
             </div>
@@ -389,28 +727,45 @@ function CombinationPanel({ resolution }) {
 
       {warnings?.length > 0 && (
         <div className={styles.comboWarnings}>
-          {warnings.map((w, i) => <div key={i} className={styles.comboWarning}>{w}</div>)}
+          {warnings.map((w, i) => (
+            <div key={i} className={styles.comboWarning}>
+              {w}
+            </div>
+          ))}
         </div>
       )}
     </div>
-  )
+  );
 }
 
 // ── ApplyResultPanel ──────────────────────────────────────────────────────────
 
 function ApplyResultPanel({ result }) {
   return (
-    <div className={`${styles.applyResult} ${result.applied > 0 ? styles.applyResultOk : styles.applyResultPartial}`}>
+    <div
+      className={`${styles.applyResult} ${result.applied > 0 ? styles.applyResultOk : styles.applyResultPartial}`}
+    >
       <div className={styles.applyResultHeader}>
-        {result.applied > 0 ? '✓ Applied' : '⚠ Partial'} — {result.applied} applied, {result.failed} failed, {result.skipped} skipped
-        {result.committed && <span className={styles.committedBadge}>📦 Committed to git</span>}
+        {result.applied > 0 ? '✓ Applied' : '⚠ Partial'} — {result.applied}{' '}
+        applied, {result.failed} failed, {result.skipped} skipped
+        {result.committed && (
+          <span className={styles.committedBadge}>📦 Committed to git</span>
+        )}
       </div>
-      {result.warnings?.map((w, i) => <div key={i} className={styles.applyWarning}>{w}</div>)}
-      {result.results?.failed?.map(f => (
+      {result.warnings?.map((w, i) => (
+        <div key={i} className={styles.applyWarning}>
+          {w}
+        </div>
+      ))}
+      {result.results?.failed?.map((f) => (
         <div key={f.proposal_id} className={styles.applyFailed}>
-          ✗ {f.title}: {f.ops?.map(o => o.error).filter(Boolean).join(', ')}
+          ✗ {f.title}:{' '}
+          {f.ops
+            ?.map((o) => o.error)
+            .filter(Boolean)
+            .join(', ')}
         </div>
       ))}
     </div>
-  )
+  );
 }
