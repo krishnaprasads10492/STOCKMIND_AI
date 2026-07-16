@@ -8,6 +8,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { usePredictionModeStore } from '@store/predictionModeStore.js'
 import { getMarketSession } from '@utils/marketHours.js'
+import { usePageVisibility } from '@hooks/usePageVisibility.js'
 
 export function useAutoRefreshPredictions(moduleId, onRefresh) {
   const { autoRefresh, refreshIntervalMs, markRefreshed } = usePredictionModeStore()
@@ -16,12 +17,11 @@ export function useAutoRefreshPredictions(moduleId, onRefresh) {
   const countRef    = useRef(null)
   const onRefreshRef = useRef(onRefresh)
   onRefreshRef.current = onRefresh
+  const isVisible = usePageVisibility()
 
   const tick = useCallback(() => {
     const session = getMarketSession(moduleId)
-    // Only auto-refresh during market hours (crypto always)
     if (!session.isLive && moduleId !== 'crypto') return
-
     markRefreshed()
     onRefreshRef.current?.()
     setCountdown(refreshIntervalMs)
@@ -34,10 +34,15 @@ export function useAutoRefreshPredictions(moduleId, onRefresh) {
       return
     }
 
-    // Main refresh timer
-    timerRef.current = setInterval(tick, refreshIntervalMs)
+    if (!isVisible) {
+      // Tab hidden — pause all timers
+      clearInterval(timerRef.current)
+      clearInterval(countRef.current)
+      return
+    }
 
-    // Countdown display — updates every second
+    // Tab visible — start/resume timers
+    timerRef.current = setInterval(tick, refreshIntervalMs)
     countRef.current = setInterval(() => {
       setCountdown(prev => Math.max(0, prev - 1000))
     }, 1000)
@@ -46,9 +51,8 @@ export function useAutoRefreshPredictions(moduleId, onRefresh) {
       clearInterval(timerRef.current)
       clearInterval(countRef.current)
     }
-  }, [autoRefresh, refreshIntervalMs, tick])
+  }, [autoRefresh, refreshIntervalMs, tick, isVisible])
 
-  // Reset countdown when refresh happens
   const forceRefresh = useCallback(() => {
     tick()
     clearInterval(timerRef.current)

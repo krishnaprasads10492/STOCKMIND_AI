@@ -1,284 +1,312 @@
-/* ── StockChart ── */
+/* ════════════════════════════════════════════════════════════════════════
+   StockChart — authoritative stylesheet
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* ── Wrapper ── */
 .wrapper {
   display: flex;
   flex-direction: column;
-  background: var(--color-bg-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  background: #04080f;
+  /* No border — slot provides it */
   overflow: hidden;
   position: relative;
+  width: 100%;
+  height: 100%;
+  flex: 1;
+  min-height: 0;
 }
 
-/* Fullscreen */
+/* ── Fullscreen — covers EVERYTHING including topbar/ticker ── */
 .enlarged {
   position: fixed !important;
-  inset: 0 !important;
-  z-index: 1000 !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  z-index: 9999 !important;
   border-radius: 0 !important;
   border: none !important;
-  height: 100dvh !important;
+  width: 100vw !important;
+  height: 100vh !important;
   width: 100dvw !important;
+  height: 100dvh !important;
 }
 
-/* ── Toolbar row 1 ── */
+/* ── Toolbar row 1 — symbol + price + controls ── */
 .toolbar1 {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 5px 10px;
-  background: var(--color-bg-elevated);
-  border-bottom: 1px solid var(--color-border-subtle);
+  padding: 0 8px;
+  background: rgba(8,15,26,0.98);
+  border-bottom: 1px solid rgba(0,212,255,0.06);
   flex-shrink: 0;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-  min-height: 38px;
+  gap: 4px;
+  height: 26px;
+  min-height: 26px;
+  max-height: 26px;
+  overflow: hidden;
 }
 .toolbarLeft {
   display: flex;
   align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+  gap: 6px;
   min-width: 0;
   flex: 1;
+  overflow: hidden;
+  /* hide overflow so legend doesn't push layout */
 }
 .toolbarRight {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
   flex-shrink: 0;
-  flex-wrap: wrap;
 }
 
-/* ── Toolbar row 2 ── */
+/* ── Toolbar row 2 — date ranges + draw tools ── */
 .toolbar2 {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 3px 10px;
-  background: var(--color-bg-base);
-  border-bottom: 1px solid var(--color-border-subtle);
+  padding: 0 8px;
+  background: rgba(4,8,15,0.98);
+  border-bottom: 1px solid rgba(0,212,255,0.04);
   flex-shrink: 0;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-  min-height: 30px;
+  gap: 4px;
+  height: 22px;
+  min-height: 22px;
+  max-height: 22px;
+  overflow: hidden;
 }
-.toolbar2Right {
+.toolbar2Right { display: flex; align-items: center; gap: 2px; }
+.drawLabel {
+  font-size: 0.5rem;
+  color: rgba(0,212,255,0.45);
+  white-space: nowrap;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  font-family: var(--font-mono);
+}
+
+/* ── OHLCV crosshair bar — always reserved, hidden when no hover ── */
+.ohlcvBar {
   display: flex;
   align-items: center;
-  gap: 4px;
-}
-.drawLabel {
-  font-size: 0.65rem;
+  gap: 8px;
+  padding: 0 8px;
+  background: rgba(8,15,26,0.85);
+  border-bottom: 1px solid rgba(0,212,255,0.03);
+  font-size: 0.58rem;
+  font-family: var(--font-mono);
   color: var(--color-text-muted);
+  flex-shrink: 0;
+  height: 14px;
+  min-height: 14px;
+  max-height: 14px;
+  overflow: hidden;
   white-space: nowrap;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
 }
+.ohlcvDate { color: var(--color-accent); font-weight: 700; opacity: 0.8; }
+.ohlcvBar strong { color: var(--color-text-primary); }
 
 /* ── Symbol info ── */
 .symbolName {
-  font-size: var(--text-sm);
-  font-weight: 700;
-  color: var(--color-text-primary);
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: var(--color-accent);
   font-family: var(--font-mono);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .price {
-  font-size: var(--text-base);
+  font-size: 0.7rem;
   font-weight: 800;
   font-family: var(--font-mono);
   color: var(--color-text-primary);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .change {
-  font-size: var(--text-xs);
+  font-size: 0.6rem;
   font-weight: 700;
   font-family: var(--font-mono);
-  padding: 2px 6px;
+  padding: 0 5px;
   border-radius: var(--radius-full);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
-.up {
-  color: var(--color-bull);
-  background: var(--color-bull-dim);
-}
-.down {
-  color: var(--color-bear);
-  background: var(--color-bear-dim);
-}
-.legendItem {
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
-  font-family: var(--font-mono);
-}
-.legendItem b {
-  color: var(--color-text-primary);
-}
+.up   { color: var(--color-bull); background: rgba(0,255,157,0.08); }
+.down { color: var(--color-bear); background: rgba(255,45,95,0.08); }
 
-/* ── Button groups ── */
-.btnGroup {
+/* Legend row — all indicator values on crosshair — scrollable, clipped */
+.legendRow {
   display: flex;
   align-items: center;
-  gap: 1px;
+  gap: 6px;
+  overflow: hidden;
+  flex: 1;
+  min-width: 0;
 }
+.legendItem {
+  font-size: 0.58rem;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.legendItem b { color: var(--color-text-primary); }
+
+/* ── Buttons ── */
+.btnGroup { display: flex; align-items: center; gap: 1px; }
 
 .iconBtn {
-  width: 26px;
-  height: 26px;
+  width: 18px;
+  height: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--color-bg-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(0,212,255,0.1);
+  border-radius: 2px;
+  color: rgba(255,255,255,0.4);
+  font-size: 0.6rem;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: border-color 0.1s, color 0.1s, background 0.1s;
   flex-shrink: 0;
   font-family: var(--font-mono);
+  /* Prevent LWC cursor override flicker */
+  user-select: none;
+  -webkit-user-select: none;
 }
-.iconBtn:hover {
-  border-color: var(--color-accent);
-  color: var(--color-accent);
-}
+.iconBtn:hover { border-color: rgba(0,212,255,0.5); color: var(--color-accent); background: rgba(0,212,255,0.08); }
 .iconBtnActive {
-  background: var(--color-accent-dim);
-  border-color: var(--color-accent);
+  background: rgba(0,212,255,0.15);
+  border-color: rgba(0,212,255,0.6);
   color: var(--color-accent);
+}
+
+/* Draw tool active highlight */
+.iconBtnDraw {
+  border-color: rgba(255,183,0,0.5);
+  background: rgba(255,183,0,0.1);
+  color: #ffb700;
 }
 
 /* Date range buttons */
 .rangeBtn {
-  padding: 2px 7px;
-  height: 22px;
+  padding: 0 5px;
+  height: 16px;
   background: none;
   border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  color: var(--color-text-muted);
-  font-size: 0.7rem;
-  font-weight: 600;
+  border-radius: 2px;
+  color: rgba(255,255,255,0.35);
+  font-size: 0.58rem;
+  font-weight: 700;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: all 0.1s;
   white-space: nowrap;
+  font-family: var(--font-mono);
 }
-.rangeBtn:hover {
-  color: var(--color-text-primary);
-  border-color: var(--color-border);
-}
+.rangeBtn:hover { color: var(--color-text-primary); border-color: rgba(0,212,255,0.2); }
 .rangeBtnActive {
   color: var(--color-accent);
-  border-color: var(--color-accent);
-  background: var(--color-accent-dim);
+  border-color: rgba(0,212,255,0.5);
+  background: rgba(0,212,255,0.1);
 }
 
-/* ── OHLCV bar ── */
-.ohlcvBar {
+/* ── Trendline JARVIS insight ── */
+.trendlineInsight {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 2px 10px;
-  background: var(--color-bg-elevated);
-  border-bottom: 1px solid var(--color-border-subtle);
-  font-size: 0.68rem;
-  font-family: var(--font-mono);
-  color: var(--color-text-muted);
+  gap: 6px;
+  padding: 2px 8px;
+  background: rgba(168,85,247,0.08);
+  border-bottom: 1px solid rgba(168,85,247,0.2);
+  font-size: 0.58rem;
+  color: rgba(168,85,247,0.9);
   flex-shrink: 0;
-  flex-wrap: wrap;
-  min-height: 20px;
+  font-style: italic;
+  height: 18px;
+  overflow: hidden;
+  white-space: nowrap;
 }
-.ohlcvDate {
-  color: var(--color-text-secondary);
-  font-weight: 600;
+.trendlineInsight span:first-child {
+  font-weight: 800;
+  font-style: normal;
+  color: var(--color-ai);
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  flex-shrink: 0;
 }
-.ohlcvBar strong {
-  color: var(--color-text-primary);
+.insightClose {
+  margin-left: auto;
+  background: none; border: none;
+  color: var(--color-text-muted); font-size: 0.9rem;
+  cursor: pointer; line-height: 1; padding: 0; flex-shrink: 0;
 }
 
-/* ── Main chart body — side-by-side layout (like reference image) ── */
+/* ════════════════════════════════════════════════════════════════════════
+   CHART BODY — canvas + sub-panes
+   KEY: chartArea must NOT have overflow:hidden — this clips the price/time
+   axis borders that LWC renders, and prevents axis drag mouse events from
+   being captured correctly. Only the canvas div itself is overflow:hidden.
+   ════════════════════════════════════════════════════════════════════════ */
+
 .chartBody {
   display: flex;
+  flex-direction: column;
   flex: 1;
   min-height: 0;
-  overflow: hidden;
-  gap: 1px;
-  background: var(--color-border-subtle);
-}
-
-/* Left: main candle chart (takes ~65% width) */
-.chartLeft {
-  flex: 65;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  background: var(--color-bg-base);
-}
-
-/* Right: stacked indicator sub-panes (takes ~35% width) */
-.chartRight {
-  flex: 35;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  gap: 1px;
-  background: var(--color-border-subtle);
-}
-
-/* ── Main chart area ── */
-.chartArea {
-  flex: 1;
+  /* No overflow:hidden here — axis borders need to paint outside canvas */
   position: relative;
-  min-height: 0;
-  overflow: hidden;
 }
+
+.chartLeft {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+/* ── Main chart area ──
+   CRITICAL: overflow must be 'visible' or 'clip' not 'hidden'.
+   'hidden' causes the right price axis and bottom time axis rendered by LWC
+   to be clipped, which also swallows the mousedown events needed for axis drag.
+   Use overflow:clip (modern browsers) — clips visually but doesn't create new
+   stacking context that would eat axis events.
+── */
+.chartArea {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  /* overflow:clip clips paint but keeps pointer events working on axes */
+  overflow: clip;
+}
+
+/* LWC appends its <canvas> tag here. Must be absolutely inset to fill. */
 .canvas {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
+  /* No overflow, no cursor — let LWC control its own cursor */
 }
 
-/* ── Sub-pane charts (RSI / MACD / Stoch / ATR) ── */
-/* When in column mode (default) */
-.subPane {
-  flex-shrink: 0;
-  height: 120px;
-  position: relative;
-  border-top: 1px solid var(--color-border-subtle);
-  display: flex;
-  flex-direction: column;
-  background: var(--color-bg-base);
-}
-/* When in right-column mode */
-.subPaneRight {
-  flex: 1;
-  min-height: 80px;
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  background: var(--color-bg-base);
-}
-.subPaneLabel {
+/* SVG drawing overlay — pointer-events:none so LWC gets all mouse events */
+.drawingOverlay {
   position: absolute;
-  top: 4px;
-  left: 8px;
-  font-size: 0.58rem;
-  font-weight: 700;
-  color: var(--color-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  z-index: 2;
-  pointer-events: none;
-  background: var(--color-bg-base);
-  padding: 1px 4px;
-  border-radius: 2px;
-}
-.subCanvas {
-  flex: 1;
+  inset: 0;
   width: 100%;
   height: 100%;
+  pointer-events: none;
+  z-index: 5;
+  overflow: visible;
 }
 
-/* ── Loading / error overlay ── */
+/* Loading/error overlay */
 .overlay {
   position: absolute;
   inset: 0;
@@ -287,69 +315,82 @@
   align-items: center;
   justify-content: center;
   gap: var(--space-3);
-  background: var(--color-bg-surface);
-  z-index: 5;
+  background: rgba(4,8,15,0.92);
+  z-index: 10;
   color: var(--color-text-muted);
   font-size: var(--text-sm);
 }
 .spinner {
-  width: 32px;
-  height: 32px;
-  border: 3px solid var(--color-border);
+  width: 28px; height: 28px;
+  border: 2px solid rgba(0,212,255,0.12);
   border-top-color: var(--color-accent);
   border-radius: 50%;
-  animation: spin 0.7s linear infinite;
+  animation: spin 0.8s linear infinite;
 }
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-.errorIcon {
-  font-size: 2rem;
-}
-.errorText {
-  color: var(--color-bear);
-  text-align: center;
-  max-width: 280px;
-  line-height: 1.5;
-}
+@keyframes spin { to { transform: rotate(360deg); } }
+.errorIcon  { font-size: 1.8rem; }
+.errorText  { color: var(--color-bear); text-align: center; max-width: 260px; line-height: 1.5; font-size: var(--text-xs); }
 .retryBtn {
-  padding: var(--space-2) var(--space-5);
-  background: var(--color-accent);
-  color: #000;
-  border: none;
-  border-radius: var(--radius-md);
-  font-size: var(--text-sm);
-  font-weight: 700;
-  cursor: pointer;
+  padding: 4px 16px;
+  background: var(--color-accent); color: #04080f;
+  border: none; border-radius: var(--radius-md);
+  font-size: var(--text-xs); font-weight: 700; cursor: pointer;
 }
-.retryBtn:hover {
-  opacity: 0.85;
+
+/* Pending first-click dot for two-click draw tools */
+.pendingDot {
+  position: absolute;
+  width: 8px; height: 8px;
+  margin-left: -4px; margin-top: -4px;
+  border-radius: 50%;
+  background: #ffb700;
+  box-shadow: 0 0 8px rgba(255,183,0,0.9);
+  pointer-events: none;
+  z-index: 15;
+  animation: dotPulse 0.8s ease-in-out infinite;
+}
+@keyframes dotPulse {
+  0%,100% { transform: scale(1); opacity:1; }
+  50%      { transform: scale(1.6); opacity:0.5; }
+}
+
+/* ── Sub-panes (RSI / MACD / Stoch / ATR) ── */
+.subPane {
+  flex-shrink: 0;
+  height: 100px;
+  position: relative;
+  border-top: 1px solid rgba(0,212,255,0.05);
+  background: rgba(4,8,15,0.96);
+  overflow: clip; /* same as chartArea — keep axis drag working */
+}
+.subPaneLabel {
+  position: absolute;
+  top: 2px; left: 6px;
+  font-size: 0.5rem;
+  font-weight: 800;
+  color: rgba(0,212,255,0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  z-index: 2;
+  pointer-events: none;
+  font-family: var(--font-mono);
+}
+.subCanvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
 }
 
 /* ── Mobile ── */
 @media (max-width: 640px) {
-  .toolbar1,
-  .toolbar2 {
-    padding: 3px 6px;
-  }
-  .ohlcvBar {
-    gap: 6px;
-    font-size: 0.62rem;
-  }
-  .subPane {
-    height: 90px;
-  }
-  .chartBody {
-    flex-direction: column;
-  }
-  .chartRight {
-    flex: none;
-    flex-direction: row;
-    height: 180px;
-  }
-  .subPaneRight {
-    min-height: 60px;
-  }
+  .toolbar1 { height: 28px; max-height: 28px; padding: 0 6px; }
+  .toolbar2 { height: 24px; max-height: 24px; padding: 0 6px; }
+  .subPane  { height: 80px; }
+}
+
+/* Draw tool active cursor — only on canvas div, leaves axes free */
+.chartArea[data-drawtool="active"],
+.chartArea[data-drawtool="active"] .canvas {
+  cursor: crosshair;
 }

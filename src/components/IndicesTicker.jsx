@@ -7,6 +7,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useMarketStore, HEADER_INDICES } from '@store/marketStore.js'
 import { batchFetchQuotes } from '@services/indianMarketFeed.js'
 import { getMarketSession } from '@utils/marketHours.js'
+import { usePageVisibility } from '@hooks/usePageVisibility.js'
 import styles from './IndicesTicker.module.css'
 
 const TICKER_REFRESH_MS = 2_400
@@ -21,6 +22,7 @@ export function IndicesTicker() {
   const [paused,     setPaused]     = useState(false)
   const [dataSource, setDataSource] = useState('mock')
   const barRef = useRef(null)
+  const isVisible = usePageVisibility()
 
   // Check market session — only poll when live, fetch once for EOD
   const session = useMemo(() => getMarketSession(activeModuleId), [activeModuleId])
@@ -52,13 +54,12 @@ export function IndicesTicker() {
 
   useEffect(() => {
     refresh()
-    // Only poll continuously when market is live; fetch once for EOD
-    if (!session.isLive && activeModuleId !== 'crypto') {
-      return  // single fetch, no interval
-    }
+    // Only poll when market is live AND tab is visible
+    if (!session.isLive && activeModuleId !== 'crypto') return
+    if (!isVisible) return  // tab hidden — pause ticker
     const id = setInterval(refresh, TICKER_REFRESH_MS)
     return () => clearInterval(id)
-  }, [refresh, session.isLive, activeModuleId])
+  }, [refresh, session.isLive, activeModuleId, isVisible])
 
   // Tooltip uses the real tick data — no fabricated fields
   const hoveredItem   = useMemo(() => hovered ? prices.find(p => p.symbol === hovered) ?? null : null, [hovered, prices])

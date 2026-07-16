@@ -9,11 +9,11 @@
   color-scheme: dark;
 
   /* Backgrounds — deep space palette */
-  --color-bg-base:       #060b14;
-  --color-bg-surface:    #0d1520;
-  --color-bg-elevated:   #131f2e;
-  --color-bg-card:       #0f1a28;
-  --color-bg-input:      #0a1220;
+  --color-bg-base:       #04080f;
+  --color-bg-surface:    #080f1a;
+  --color-bg-elevated:   #0e1825;
+  --color-bg-card:       #0a1220;
+  --color-bg-input:      #060d18;
 
   /* Borders */
   --color-border:        #1e3a5f;
@@ -27,36 +27,45 @@
 
   /* Accent — electric cyan */
   --color-accent:        #00d4ff;
-  --color-accent-hover:  #40e0ff;
-  --color-accent-dim:    rgba(0,212,255,0.12);
-  --color-accent-glow:   0 0 20px rgba(0,212,255,0.35);
+  --color-accent-hover:  #40e8ff;
+  --color-accent-dim:    rgba(0,212,255,0.10);
+  --color-accent-glow:   0 0 28px rgba(0,212,255,0.45);
 
   /* Market colours */
-  --color-bull:          #00ff88;
-  --color-bull-dim:      rgba(0,255,136,0.1);
-  --color-bear:          #ff3366;
-  --color-bear-dim:      rgba(255,51,102,0.1);
+  --color-bull:          #00ff9d;
+  --color-bull-dim:      rgba(0,255,157,0.08);
+  --color-bear:          #ff2d5f;
+  --color-bear-dim:      rgba(255,45,95,0.10);
   --color-neutral:       #7ba7cc;
 
   /* AI highlight — electric purple */
-  --color-ai:            #b060ff;
-  --color-ai-dim:        rgba(176,96,255,0.12);
-  --color-ai-glow:       0 0 16px rgba(176,96,255,0.4);
+  --color-ai:            #a855f7;
+  --color-ai-dim:        rgba(168,85,247,0.12);
+  --color-ai-glow:       0 0 24px rgba(168,85,247,0.5);
 
   /* Warning */
-  --color-warn:          #ffaa00;
-  --color-warn-dim:      rgba(255,170,0,0.1);
+  --color-warn:          #ffb700;
+  --color-warn-dim:      rgba(255,183,0,0.10);
+
+  /* JARVIS — arc reactor blue-white */
+  --color-jarvis:        #00dcff;
+  --color-jarvis-dim:    rgba(0,220,255,0.08);
+  --color-jarvis-glow:   0 0 32px rgba(0,220,255,0.6);
+
+  /* Holographic shimmer */
+  --holo-gradient:       linear-gradient(135deg, rgba(0,212,255,0.15) 0%, rgba(168,85,247,0.15) 50%, rgba(0,255,157,0.10) 100%);
 
   /* Cyber grid overlay */
-  --grid-line:           rgba(0,212,255,0.04);
+  --grid-line:           rgba(0,212,255,0.035);
 
   /* Shadows */
-  --shadow-sm:   0 1px 4px rgba(0,0,0,0.6);
-  --shadow-md:   0 4px 16px rgba(0,0,0,0.6);
-  --shadow-lg:   0 8px 32px rgba(0,0,0,0.7);
-  --shadow-card: 0 0 0 1px var(--color-border), 0 4px 24px rgba(0,0,0,0.5);
-  --shadow-glow-ai: 0 0 24px rgba(176,96,255,0.2);
-  --shadow-glow-accent: 0 0 20px rgba(0,212,255,0.25);
+  --shadow-sm:   0 1px 4px rgba(0,0,0,0.7);
+  --shadow-md:   0 4px 20px rgba(0,0,0,0.7);
+  --shadow-lg:   0 8px 40px rgba(0,0,0,0.8);
+  --shadow-card: 0 0 0 1px var(--color-border), 0 4px 24px rgba(0,0,0,0.6);
+  --shadow-glow-ai:     0 0 32px rgba(168,85,247,0.25);
+  --shadow-glow-accent: 0 0 28px rgba(0,212,255,0.30);
+  --shadow-glow-jarvis: 0 0 40px rgba(0,220,255,0.35);
 }
 
 /* ── Light theme ── */
@@ -161,13 +170,13 @@ body {
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  /* Background pattern — overridden by themeStore when a theme is applied */
   background-image:
+    radial-gradient(ellipse 80% 50% at 20% 10%, rgba(0,212,255,0.04) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 80% 80%, rgba(168,85,247,0.04) 0%, transparent 60%),
     linear-gradient(var(--grid-line) 1px, transparent 1px),
     linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
-  background-size: 40px 40px;
+  background-size: 100% 100%, 100% 100%, 48px 48px, 48px 48px;
   background-attachment: fixed;
-  /* Night light filter — set by themeStore.js */
   filter: var(--night-filter, none);
   transition: filter 0.3s ease, background-color var(--transition-slow);
 }
@@ -290,6 +299,56 @@ code, pre { font-family: var(--font-mono); font-size: var(--text-sm); }
   pointer-events: none;
   z-index: 9998;
 }
+
+/* ─── Global futuristic keyframes ─────────────────────────────────────── */
+@keyframes jarvisPulse {
+  0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 20px rgba(0,220,255,0.5); }
+  50%       { opacity: 0.7; transform: scale(0.97); box-shadow: 0 0 8px rgba(0,220,255,0.2); }
+}
+@keyframes arcReactorSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes holoShimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+@keyframes glitchFlash {
+  0%, 100% { clip-path: inset(0 0 100% 0); opacity: 0; }
+  4%  { clip-path: inset(10% 0 60% 0); opacity: 1; }
+  8%  { clip-path: inset(70% 0 10% 0); opacity: 0.8; }
+  12% { clip-path: inset(40% 0 40% 0); opacity: 0; }
+}
+@keyframes scanDown {
+  0%   { top: -4px; opacity: 0.8; }
+  100% { top: 100%; opacity: 0; }
+}
+@keyframes neuralPulse {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50%       { opacity: 1;   transform: scale(1.08); }
+}
+@keyframes dataStream {
+  0%   { transform: translateY(0);    opacity: 1; }
+  100% { transform: translateY(-20px); opacity: 0; }
+}
+
+/* ─── Utility: holographic card border ────────────────────────────────── */
+.holo-border {
+  position: relative;
+  border: 1px solid transparent !important;
+  background-clip: padding-box;
+}
+.holo-border::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgba(0,212,255,0.4), rgba(168,85,247,0.4), rgba(0,255,157,0.3));
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.holo-border:hover::before { opacity: 1; }
 
 /* ─── Theme transition (smooth when switching themes) ─────────────────── */
 :root {

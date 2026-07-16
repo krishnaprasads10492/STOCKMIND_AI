@@ -57,7 +57,9 @@ function runSafe(cmd, opts = {}) {
   try { return { ok: true, out: run(cmd, opts) } } catch (e) { return { ok: false, error: e.message } }
 }
 function runInherit(cmd, opts = {}) {
-  execSync(cmd, { stdio: 'inherit', timeout: 120_000, ...opts })
+  // Default timeout raised to 10 min for build steps.
+  // npm install uses its own execSync call with a 10-min timeout.
+  execSync(cmd, { stdio: 'inherit', timeout: 10 * 60_000, ...opts })
 }
 
 // ── Scenario library (file-based, no server needed) ───────────────────────────
@@ -291,12 +293,34 @@ function checkNodeDeps() {
 
 function installNodeDeps(reason = '') {
   if (reason) info(`npm install reason: ${reason}`)
+  // Use spawn (streaming) with a generous timeout — npm install on a fresh machine
+  // with a slow connection can easily take 3–5 minutes. spawnSync with a short
+  // timeout caused silent ETIMEDOUT failures on first run.
+  const NPM_INSTALL_TIMEOUT = 10 * 60 * 1000  // 10 minutes — safe for any network
   try {
-    runInherit('npm install --legacy-peer-deps', { cwd: __dirname })
+    execSync('npm install --legacy-peer-deps', {
+      stdio: 'inherit',
+      timeout: NPM_INSTALL_TIMEOUT,
+      cwd: __dirname,
+    })
     ok('npm install complete ✓')
     saveScenario('node_modules missing', 'Run npm install --legacy-peer-deps', true)
     return true
   } catch (e) {
+    // If it timed out, check if essentials actually landed (partial install)
+    if (e.signal === 'SIGTERM' || /ETIMEDOUT|timed? ?out/i.test(e.message ?? '')) {
+      const partialOk = existsSync(join(__dirname, 'node_modules', 'express')) &&
+                        existsSync(join(__dirname, 'node_modules', 'vite'))
+      if (partialOk) {
+        warn('npm install timed out but essential packages are present — continuing.')
+        warn('Run "npm install --legacy-peer-deps" in a separate terminal to finish.')
+        return true
+      }
+      err('npm install timed out and essential packages are missing.')
+      warn('Fix: Run "npm install --legacy-peer-deps" in your terminal, then restart.')
+      warn('Slow internet? Run with: npm install --legacy-peer-deps --prefer-offline')
+      return false
+    }
     const known = lookupScenario(e.message)
     if (known) { warn(`Known issue: ${known.fix}`) }
     err(`npm install failed: ${e.message?.slice(0, 150)}`)
@@ -391,7 +415,7 @@ async function checkPythonDeps(pythonCmd) {
 
   const { venvDir, pip, python: venvPy } = getVenvPaths(pythonCmd)
 
-  // ── Windows Long Path: detect, warn, attempt fix ──────────────────────────
+  // ── Windows Long Path: detect, warn once, attempt silent fix ───────────────
   if (process.platform === 'win32') {
     let longPathEnabled = false
     try {
@@ -400,14 +424,19 @@ async function checkPythonDeps(pythonCmd) {
     } catch {}
 
     if (!longPathEnabled) {
-      warn('Windows Long Path support is DISABLED.')
-      warn('This causes numpy/scipy install failures on paths > 260 chars.')
-      warn('Impact: Python AI backend may fail to install. App still works in JS-only mode.')
-      warn('Fix (requires Admin + reboot):')
-      warn('  reg add "HKLM\\SYSTEM\\CurrentControlSet\\Control\\FileSystem" /v LongPathsEnabled /t REG_DWORD /d 1 /f')
-      // Try silently — only works if running as admin
-      try { run('reg add "HKLM\\SYSTEM\\CurrentControlSet\\Control\\FileSystem" /v LongPathsEnabled /t REG_DWORD /d 1 /f', { timeout: 3000 }) ; ok('Long Path enabled (takes effect after reboot)') }
-      catch { warn('Could not enable automatically — run above command as Administrator, then reboot') }
+      // Attempt silent fix first — only succeeds if running as admin
+      let fixed = false
+      try {
+        run('reg add "HKLM\\SYSTEM\\CurrentControlSet\\Control\\FileSystem" /v LongPathsEnabled /t REG_DWORD /d 1 /f', { timeout: 3000 })
+        fixed = true
+        ok('Windows Long Path enabled (will take full effect after reboot)')
+      } catch {}
+
+      if (!fixed) {
+        // Single concise warning — no wall-of-text on every run
+        warn('Windows Long Path not enabled — Python heavy packages installed as wheels (avoids compiler).')
+        warn('Optional: run as Admin once → reg add "HKLM\\SYSTEM\\CurrentControlSet\\Control\\FileSystem" /v LongPathsEnabled /t REG_DWORD /d 1 /f')
+      }
     }
   }
 
@@ -452,67 +481,106 @@ async function checkPythonDeps(pythonCmd) {
 async function installPythonDeps(pythonCmd, reqPath, pip, venvPy, reqHash, stampFile) {
   info('Installing Python dependencies...')
 
-  // Upgrade pip
-  try { execSync(pip ? `"${pip}" install --upgrade pip --quiet` : `"${pythonCmd}" -m pip install --upgrade pip --quiet`, { stdio: 'pipe', cwd: join(__dirname, 'ai_backend'), timeout: 60_000 }) } catch {}
+  // ── Python version detection ───────────────────────────────────────────────
+  const minor  = getPythonMinor(venvPy)
+  const major  = 3
+  info(`Python ${major}.${minor} detected — selecting compatible wheel versions`)
 
-  // Windows: use C:\Tmp to keep paths short, install wheels-only for heavy packages first
-  if (process.platform === 'win32') {
-    const shortTemp = 'C:\\Tmp'
+  // ── Pip self-upgrade ───────────────────────────────────────────────────────
+  const pipCmd = pip || `"${pythonCmd}" -m pip`
+  try {
+    execSync(`"${pip || pythonCmd}" ${pip ? '' : '-m pip'} install --upgrade pip --quiet`.trim(),
+      { stdio: 'pipe', cwd: join(__dirname, 'ai_backend'), timeout: 60_000 })
+  } catch {}
+
+  // ── Resolve Python-version-aware package list ─────────────────────────────
+  // Python 3.13+ wheels: pandas 2.2.x has none → need 3.0+
+  //                      pydantic 2.11.x needs pydantic-core 2.33 → no 3.14 wheel → need 2.13+
+  //                      scipy, scikit-learn, statsmodels: 3.13+ needs latest
+  // Build the base wheel-only list using flexible lower-bounds when on 3.13+
+  const needsNewWheels = minor >= 13
+
+  const coreWheels = needsNewWheels
+    ? ['numpy', 'pandas', 'scipy', 'scikit-learn', 'lightgbm', 'xgboost',
+       'pydantic', 'statsmodels', 'Pillow', 'openpyxl']
+    : ['numpy==1.26.4', 'pandas==2.2.3', 'scipy==1.14.1', 'scikit-learn==1.5.2',
+       'lightgbm==4.5.0', 'xgboost==2.1.3', 'pydantic==2.11.7',
+       'statsmodels==0.14.4', 'Pillow==11.2.1', 'openpyxl==3.1.5']
+
+  // ── Windows: short TEMP path + wheel-only first pass ─────────────────────
+  const isWin     = process.platform === 'win32'
+  const shortTemp = isWin ? 'C:\\Tmp' : null
+  const env       = isWin
+    ? { ...process.env, TEMP: shortTemp, TMP: shortTemp, TMPDIR: shortTemp }
+    : process.env
+
+  if (isWin && shortTemp) {
     try { if (!existsSync(shortTemp)) mkdirSync(shortTemp, { recursive: true }) } catch {}
-    const env = { ...process.env, TEMP: shortTemp, TMP: shortTemp, TMPDIR: shortTemp }
-
-    // Get Python minor version to pick correct numpy
-    const minor  = getPythonMinor(venvPy)
-    // numpy 1.26.4 has Python ≤3.12 wheels; Python 3.13+ needs numpy 2.x
-    const numpy  = minor >= 13 ? 'numpy' : 'numpy==1.26.4'
-    const wheels = [numpy, 'pandas', 'scipy', 'scikit-learn', 'lightgbm', 'xgboost']
-    const wCmd   = pip
-      ? `"${pip}" install ${wheels.join(' ')} --only-binary=:all: --quiet`
-      : `"${pythonCmd}" -m pip install ${wheels.join(' ')} --only-binary=:all: --quiet`
-
-    info(`Python ${3}.${minor} — installing wheel-only packages via C:\\Tmp...`)
-    try {
-      execSync(wCmd, { stdio: 'inherit', cwd: join(__dirname, 'ai_backend'), env, timeout: 120_000 })
-      ok('Core ML wheels installed ✓')
-    } catch (e) {
-      warn(`Wheel pass failed (non-fatal): ${e.message?.slice(0, 80)}`)
-      saveScenario('only-binary wheel install failed', 'Windows Long Paths may still be needed — reboot after enabling', false)
-    }
-
-    // Full install with short TEMP
-    const fullCmd = pip ? `"${pip}" install -r "${reqPath}" --quiet` : `"${pythonCmd}" -m pip install -r "${reqPath}" --quiet`
-    try {
-      execSync(fullCmd, { stdio: 'inherit', cwd: join(__dirname, 'ai_backend'), env, timeout: 180_000 })
-      ok('Python deps installed ✓')
-      if (stampFile) writeFileSync(stampFile, reqHash)
-      saveScenario('python deps install', 'Use short TEMP dir and wheel-only pass for numpy/scipy', true)
-      return true
-    } catch (e) {
-      // Check if essentials are present
-      const chk = runSafe(`"${venvPy}" -c "import fastapi, numpy, pandas; print('ok')"`)
-      if (chk.ok && chk.out.trim() === 'ok') {
-        ok('Essential packages present — AI backend will start ✓')
-        if (stampFile) writeFileSync(stampFile, reqHash)
-        return true
-      }
-      err(`Python deps incomplete: ${e.message?.slice(0, 120)}`)
-      warn('Impact: AI backend unavailable. App works in JS-only mode (reduced accuracy).')
-      warn('To fix: Enable Windows Long Paths (reg key + reboot), then re-run.')
-      saveScenario(e.message?.slice(0, 80) ?? 'pip install failed', 'Enable Windows Long Path: reg add HKLM\\SYSTEM\\... LongPathsEnabled 1 + reboot', false)
-      return false
-    }
   }
 
-  // Linux / macOS — straightforward
-  const cmd = pip ? `"${pip}" install -r "${reqPath}" --quiet` : `"${pythonCmd}" -m pip install -r "${reqPath}" --quiet`
+  // Pass 1 — heavy wheels (binary only, fast, no compiler needed)
+  const wCmd = `"${pip}" install ${coreWheels.join(' ')} --only-binary=:all: --quiet`
+  info(`Installing core ML wheels (Python ${major}.${minor})...`)
   try {
-    runInherit(cmd, { cwd: join(__dirname, 'ai_backend') })
+    execSync(wCmd, {
+      stdio:   'inherit',
+      cwd:     join(__dirname, 'ai_backend'),
+      env,
+      timeout: 8 * 60_000,  // 8 min — large packages on slow connections
+    })
+    ok('Core ML wheels installed ✓')
+  } catch (e) {
+    warn(`Wheel pass non-fatal: ${e.message?.slice(0, 80)}`)
+    saveScenario('only-binary wheel install failed', 'Slow connection or no wheel for this Python version', false)
+  }
+
+  // Pass 2 — full requirements.txt (remaining pure-Python packages)
+  const fullCmd = `"${pip}" install -r "${reqPath}" --quiet`
+  try {
+    execSync(fullCmd, {
+      stdio:   'inherit',
+      cwd:     join(__dirname, 'ai_backend'),
+      env,
+      timeout: 10 * 60_000,  // 10 min for full install including pure-Python packages
+    })
     ok('Python deps installed ✓')
     if (stampFile) writeFileSync(stampFile, reqHash)
+    saveScenario('python deps install', 'Use short TEMP dir and wheel-only pre-pass', true)
     return true
   } catch (e) {
-    err(`Python deps failed: ${e.message?.slice(0, 150)}`)
-    saveScenario(e.message?.slice(0, 80) ?? 'pip install error', 'Check pip output above for specific package', false)
+    // Essential check — if fastapi + numpy + pandas are importable, we can still run
+    const chk = runSafe(`"${venvPy}" -c "import fastapi, numpy, pandas; print('ok')"`)
+    if (chk.ok && chk.out.trim() === 'ok') {
+      ok('Essential packages present — AI backend will start ✓')
+      if (stampFile) writeFileSync(stampFile, reqHash)
+      return true
+    }
+
+    // Targeted diagnosis for the most common failures
+    const msg = e.message ?? ''
+    if (/pydantic.core/i.test(msg) && minor >= 13) {
+      warn('pydantic-core has no wheel for this Python version.')
+      warn('Fix: pip install pydantic --upgrade  (auto-selects compatible version)')
+      try {
+        execSync(`"${pip}" install "pydantic>=2.13" --only-binary=:all: --quiet`, { stdio: 'inherit', cwd: join(__dirname, 'ai_backend'), env, timeout: 120_000 })
+        const chk2 = runSafe(`"${venvPy}" -c "import fastapi, numpy, pandas; print('ok')"`)
+        if (chk2.ok && chk2.out.trim() === 'ok') {
+          ok('Recovered — pydantic upgraded ✓')
+          if (stampFile) writeFileSync(stampFile, reqHash)
+          return true
+        }
+      } catch {}
+    }
+
+    err(`Python deps incomplete: ${msg.slice(0, 120)}`)
+    warn('Impact: AI backend unavailable. App works in JS-only mode (reduced accuracy).')
+    if (isWin) {
+      warn('Windows fix: Run as Admin once →')
+      warn('  reg add "HKLM\\SYSTEM\\CurrentControlSet\\Control\\FileSystem" /v LongPathsEnabled /t REG_DWORD /d 1 /f')
+      warn('  Then reboot and restart the app.')
+    }
+    saveScenario(msg.slice(0, 80) ?? 'pip install failed',
+      isWin ? 'Enable Windows Long Path (reg + reboot) or upgrade Python to 3.12' : 'Run pip install manually', false)
     return false
   }
 }
@@ -834,16 +902,30 @@ async function main() {
 
     // First-run: explain credential behaviour
     if (isFirstRun) {
-      const seedExists  = existsSync(join(__dirname, 'users-seed.json'))
+      const seedExists    = existsSync(join(__dirname, 'users-seed.json'))
       const exampleExists = existsSync(join(__dirname, 'users-seed.example.json'))
+
       if (seedExists) {
-        ok('users-seed.json found — your super-admin credentials will be created from it.')
+        // Tell user exactly what accounts will be created
+        try {
+          const entries = JSON.parse(readFileSync(join(__dirname, 'users-seed.json'), 'utf8'))
+          const names   = entries.map(u => `${u.username} (${u.role})`).join(', ')
+          ok(`users-seed.json found — seeding: ${names}`)
+        } catch {
+          ok('users-seed.json found — accounts will be seeded from it.')
+        }
       } else if (exampleExists) {
-        ok('users-seed.example.json found — credentials will be seeded from the example file.')
-        info('To use your own credentials: edit users-seed.json before first run.')
+        try {
+          const entries = JSON.parse(readFileSync(join(__dirname, 'users-seed.example.json'), 'utf8'))
+          const names   = entries.map(u => `${u.username} (${u.role})`).join(', ')
+          ok(`users-seed.example.json found — seeding: ${names}`)
+          info('TIP: Copy to users-seed.json and edit before first run to use your own credentials.')
+        } catch {
+          ok('users-seed.example.json found — using as seed source.')
+        }
       } else {
-        warn('No seed file found — a default admin (admin / Admin@1234) will be created.')
-        warn('To set your own super-admin: create users-seed.json before the backend starts.')
+        warn('No seed file found — default admin (admin / Admin@1234) will be created.')
+        warn('Create users-seed.json before first run to set your own credentials.')
       }
     }
 

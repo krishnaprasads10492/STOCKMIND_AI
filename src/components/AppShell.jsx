@@ -14,6 +14,7 @@ import { ChangePasswordModal } from './ChangePasswordModal.jsx'
 import { VoiceCommandIndicator } from './VoiceCommandIndicator.jsx'
 import { DangerSignalBanner } from './DangerSignalBanner.jsx'
 import { PWAInstallBanner } from './PWAInstallBanner.jsx'
+import { JarvisOrb } from './JarvisOrb.jsx'
 import styles from './AppShell.module.css'
 
 const NAV_ITEMS = [
@@ -281,6 +282,13 @@ export function AppShell() {
                 <span className={styles.navIcon} aria-hidden="true">📄</span>
                 <span className={styles.navLabel}>Doc Upgrade</span>
               </NavLink>
+              <NavLink
+                to="/distribute"
+                className={({ isActive }) => `${styles.navItem} ${isActive ? styles.navActive : ''}`}
+              >
+                <span className={styles.navIcon} aria-hidden="true">📦</span>
+                <span className={styles.navLabel}>Distribute</span>
+              </NavLink>
             </>
           )}
         </nav>
@@ -335,6 +343,11 @@ export function AppShell() {
 
       {/* PWA install banner — mobile only, shown once */}
       <PWAInstallBanner />
+
+      {/* JARVIS persistent orb — floating AI presence */}
+      <ErrorBoundary fallbackMessage="">
+        <JarvisOrb />
+      </ErrorBoundary>
     </div>
   )
 }

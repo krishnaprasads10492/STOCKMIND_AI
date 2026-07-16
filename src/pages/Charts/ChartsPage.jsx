@@ -1,296 +1,331 @@
 /**
- * ChartsPage — Full TradingView-powered charting page.
+ * ChartsPage — JARVIS Trading Terminal
  *
- * Features:
- *   - Full-screen TradingView Advanced Chart
- *   - Symbol picker synced with StockMind market modules
- *   - Interval selector (1m, 5m, 15m, 30m, 1h, 4h, 1D, 1W, 1M)
- *   - Quick-add popular indicators (RSI, MACD, Bollinger, Volume, EMA)
- *   - Compare mode — overlay multiple symbols
- *   - Layout presets: Single, Split (2 charts), Quad (4 charts)
- *   - Watchlist sidebar — quick switch between favourites
- *   - Theme synced with app theme
+ * Maximum chart area. Watchlist lives in a collapsible slim symbol strip
+ * at the top instead of a wide sidebar. Drawing tools and all controls
+ * are in the toolbar rows above the chart.
  */
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useMarketStore, MARKET_MODULES } from '@store/marketStore.js'
 import { useThemeStore } from '@store/themeStore.js'
+import { useAuthStore } from '@store/authStore.js'
 import { ErrorBoundary } from '@components/ErrorBoundary.jsx'
-import { InfoTooltip } from '@components/InfoTooltip.jsx'
 import { StockChart } from '@components/StockChart.jsx'
 import { Disclaimer } from '@components/Disclaimer.jsx'
+import { apiFetch } from '@services/apiClient.js'
+import { usePageVisibility } from '@hooks/usePageVisibility.js'
 import styles from './ChartsPage.module.css'
 
-const PAGE = 'charts'
-
-// ── Interval options ──────────────────────────────────────────────────────────
+// ── Constants ─────────────────────────────────────────────────────────────────
 
 const INTERVALS = [
-  { value: '5m',  label: '5m' },
+  { value: '5m', label: '5m' },
   { value: '15m', label: '15m' },
   { value: '30m', label: '30m' },
-  { value: '1h',  label: '1h' },
-  { value: '1d',  label: '1D' },
+  { value: '1h', label: '1h' },
+  { value: '1d', label: '1D' },
   { value: '1wk', label: '1W' },
   { value: '1mo', label: '1M' },
 ]
 
-// ── Quick indicator presets ───────────────────────────────────────────────────
-
-const INDICATOR_PRESETS = [
-  // Overlays (on main chart)
-  { id: 'ema20',      label: 'EMA 20',     group: 'overlay' },
-  { id: 'ema50',      label: 'EMA 50',     group: 'overlay' },
-  { id: 'ema200',     label: 'EMA 200',    group: 'overlay' },
-  { id: 'bb',         label: 'Bollinger',  group: 'overlay' },
-  { id: 'vwap',       label: 'VWAP',       group: 'overlay' },
-  { id: 'supertrend', label: 'Supertrend', group: 'overlay' },
-  // Sub-panes (separate charts below)
-  { id: 'rsi',        label: 'RSI',        group: 'pane' },
-  { id: 'macd',       label: 'MACD',       group: 'pane' },
-  { id: 'stoch',      label: 'Stoch',      group: 'pane' },
-  { id: 'atr',        label: 'ATR',        group: 'pane' },
-  { id: 'volume',     label: 'Volume',     group: 'overlay' },
+const CHART_TYPES = [
+  { id: 'candle', label: '🕯 Candle' },
+  { id: 'ha',     label: '⬡ HA' },
+  { id: 'bar',    label: '▮ Bar' },
+  { id: 'line',   label: '╱ Line' },
+  { id: 'area',   label: '◭ Area' },
 ]
-
-// ── Indicator info ────────────────────────────────────────────────────────────
-
-const INDICATOR_INFO = {
-  ema20:      'EMA 20: Short-term trend. Price above = bullish. Crossover with EMA50 = signal.',
-  ema50:      'EMA 50: Medium-term trend. Golden cross (EMA20 > EMA50) = bullish. Death cross = bearish.',
-  ema200:     'EMA 200: Long-term benchmark. Price above = bull market. Below = bear market.',
-  bb:         'Bollinger Bands: Volatility channel. Upper band = overbought. Lower = oversold. Squeeze = breakout.',
-  vwap:       'VWAP: Institutional benchmark. Price above = bullish intraday. Below = bearish.',
-  supertrend: 'Supertrend: ATR-based trend. Green line = uptrend. Red line = downtrend. Flip = trend change.',
-  rsi:        'RSI(14): Momentum. Below 30 = oversold (buy). Above 70 = overbought (sell). Sub-pane.',
-  macd:       'MACD(12,26,9): Trend + momentum. MACD > Signal = bullish. Histogram shows divergence. Sub-pane.',
-  stoch:      'Stochastic(14,3): Momentum. %K below 20 = oversold. Above 80 = overbought. Sub-pane.',
-  atr:        'ATR(14): Volatility. High ATR = volatile. Use for stop-loss sizing: SL = 1.5–2× ATR. Sub-pane.',
-  volume:     'Volume: Green = buying pressure. Red = selling pressure. High volume confirms moves.',
-}
-
-// ── Layout options ────────────────────────────────────────────────────────────
 
 const LAYOUTS = [
-  { id: 'single', label: '⬜ Single',  icon: '⬜' },
-  { id: 'split',  label: '⬛⬛ Split', icon: '⬛⬛' },
-  { id: 'quad',   label: '⊞ Quad',    icon: '⊞' },
+  { id: 'single', label: '⬜' , title: 'Single' },
+  { id: 'split',  label: '⬛⬛', title: 'Split 2' },
+  { id: 'triple', label: '⊟⊠', title: 'Triple' },
+  { id: 'quad',   label: '⊞',  title: 'Quad 4' },
 ]
 
-export default function ChartsPage() {
-  const { activeSymbol, activeModuleId, getActiveModule, favourites } = useMarketStore()
-  const { activeTheme } = useThemeStore()
+const OVERLAYS = [
+  { id: 'ema20',      label: 'EMA20' },
+  { id: 'ema50',      label: 'EMA50' },
+  { id: 'ema200',     label: 'EMA200' },
+  { id: 'bb',         label: 'BB' },
+  { id: 'vwap',       label: 'VWAP' },
+  { id: 'supertrend', label: 'SuperTrend' },
+  { id: 'volume',     label: 'Volume' },
+]
 
-  // Chart slots — each has its own symbol + interval
+const SUB_PANES = [
+  { id: 'rsi',   label: 'RSI' },
+  { id: 'macd',  label: 'MACD' },
+  { id: 'stoch', label: 'Stoch' },
+  { id: 'atr',   label: 'ATR' },
+]
+
+// JARVIS contextual hints — cycle based on what's active
+const JARVIS_HINTS = {
+  rsi:        hint => `RSI insight: ${hint?.rsi > 70 ? 'Overbought — consider reducing exposure.' : hint?.rsi < 30 ? 'Oversold — potential reversal zone.' : `RSI at ${hint?.rsi?.toFixed(1) ?? '—'} — neutral momentum.`}`,
+  macd:       () => 'MACD active — watch for histogram divergence from price. Crossover above zero line is bullish.',
+  supertrend: () => 'Supertrend active — green line = uptrend, red = downtrend. Flip signals trend change.',
+  bb:         () => 'Bollinger Bands active — price at upper band = overbought. Squeeze = incoming breakout.',
+  vwap:       () => 'VWAP active — institutional fair value. Sustained above = bullish intraday bias.',
+  default:    sym => `Analyzing ${sym} — add indicators from the toolbar to get JARVIS insights.`,
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
+
+export default function ChartsPage() {
+  const location = useLocation()
+  const { activeSymbol, activeModuleId, getActiveModule } = useMarketStore()
+  const { activeTheme } = useThemeStore()
+  const token = useAuthStore(s => s.token)
+
+  // Tell AppShell .main to not add padding/scroll so Charts fills the screen
+  useEffect(() => {
+    const mainEl = document.getElementById('main-content')
+    if (!mainEl) return
+    const prev = mainEl.style.cssText
+    mainEl.style.padding  = '0'
+    mainEl.style.overflow = 'hidden'
+    return () => {
+      // Restore when leaving Charts page
+      mainEl.style.cssText = prev
+    }
+  }, [])
+
+  // Chart slots — each independently controlled
   const [slots, setSlots] = useState([
-    { id: 1, symbol: activeSymbol || 'NIFTY50', exchange: 'NSE', interval: '1d' },
-    { id: 2, symbol: 'BANKNIFTY',  exchange: 'NSE', interval: '1d' },
-    { id: 3, symbol: 'SENSEX',     exchange: 'BSE', interval: '1d' },
-    { id: 4, symbol: 'BTCUSDT',    exchange: 'BINANCE', interval: '1d' },
+    { id: 1, symbol: activeSymbol || 'NIFTY50', exchange: 'NSE', interval: '1d', chartType: 'candle' },
+    { id: 2, symbol: 'BANKNIFTY',  exchange: 'NSE',     interval: '1d', chartType: 'candle' },
+    { id: 3, symbol: 'SENSEX',     exchange: 'BSE',     interval: '1d', chartType: 'candle' },
+    { id: 4, symbol: 'BTCUSDT',    exchange: 'BINANCE', interval: '1d', chartType: 'candle' },
   ])
 
-  const [layout,         setLayout]         = useState('single')
-  const [activeSlot,     setActiveSlot]      = useState(1)
-  const [activeIndicators, setActiveIndicators] = useState(['ema20', 'volume'])
-  const [showWatchlist,  setShowWatchlist]   = useState(true)
+  const [layout,      setLayout]     = useState('single')
+  const [activeSlot,  setActiveSlot] = useState(1)
+  const [indicators,  setIndicators] = useState(['ema20', 'volume'])
+  const [scaleMode,   setScaleMode]  = useState('normal')
+  const [symbolStripOpen, setSymbolStripOpen] = useState(false)
+  const [stripSearch, setStripSearch]  = useState('')
+  const [liveChanges, setLiveChanges]  = useState({})
+  const [jarvisHint,  setJarvisHint]   = useState('')
+  const isVisible = usePageVisibility()
 
-  const activeMod = getActiveModule()
-
-  // Get visible slot count
-  const slotCount = layout === 'single' ? 1 : layout === 'split' ? 2 : 4
+  const slotCount = layout === 'single' ? 1 : layout === 'split' ? 2 : layout === 'triple' ? 3 : 4
   const visibleSlots = slots.slice(0, slotCount)
+  const currentSlot  = slots.find(s => s.id === activeSlot) ?? slots[0]
+
+  // Sync active symbol from market store when navigating to charts
+  useEffect(() => {
+    if (activeSymbol && activeSymbol !== slots[0].symbol) {
+      setSlots(prev => prev.map((s, i) => i === 0 ? { ...s, symbol: activeSymbol } : s))
+    }
+  }, [activeSymbol]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // JARVIS contextual hint
+  useEffect(() => {
+    const activeInds = indicators
+    let hint = JARVIS_HINTS.default(currentSlot.symbol)
+    for (const key of Object.keys(JARVIS_HINTS)) {
+      if (key !== 'default' && activeInds.includes(key)) {
+        hint = JARVIS_HINTS[key]({})
+        break
+      }
+    }
+    setJarvisHint(hint)
+  }, [indicators, currentSlot.symbol])
+
+  // Fetch live price changes — only when tab is visible
+  useEffect(() => {
+    if (!token || !isVisible) return
+    let mounted = true
+    async function fetchChanges() {
+      try {
+        const res = await apiFetch('/api/market/ohlcv/NIFTY50?exchange=NSE&bars=2')
+        if (!mounted) return
+        const json = await res.json()
+        if (json.data?.length >= 2) {
+          const [prev, cur] = json.data.slice(-2)
+          const changePct = ((cur.close - prev.close) / prev.close) * 100
+          setLiveChanges(lc => ({ ...lc, NIFTY50: { change: cur.close - prev.close, changePct } }))
+        }
+      } catch {}
+    }
+    fetchChanges()
+    const t = setInterval(fetchChanges, 60_000)
+    return () => { mounted = false; clearInterval(t) }
+  }, [token, isVisible])
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    function handleKey(e) {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
+      const INTERVAL_IDX = INTERVALS.findIndex(i => i.value === currentSlot.interval)
+      if (e.key === ']' && INTERVAL_IDX < INTERVALS.length - 1) {
+        updateSlot(activeSlot, { interval: INTERVALS[INTERVAL_IDX + 1].value })
+      }
+      if (e.key === '[' && INTERVAL_IDX > 0) {
+        updateSlot(activeSlot, { interval: INTERVALS[INTERVAL_IDX - 1].value })
+      }
+      if (e.key === 'w' || e.key === 'W') setSymbolStripOpen(o => !o)
+    }
+    window.addEventListener('keydown', handleKey)
+    return () => window.removeEventListener('keydown', handleKey)
+  }, [activeSlot, currentSlot.interval]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function updateSlot(id, updates) {
     setSlots(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s))
   }
 
-  function setSlotSymbol(id, symbol, exchange) {
-    updateSlot(id, { symbol, exchange })
+  function toggleIndicator(id) {
+    setIndicators(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id])
   }
-
-  function setSlotInterval(id, interval) {
-    updateSlot(id, { interval })
-  }
-
-  function toggleIndicator(indicatorId) {
-    setActiveIndicators(prev =>
-      prev.includes(indicatorId)
-        ? prev.filter(i => i !== indicatorId)
-        : [...prev, indicatorId]
-    )
-  }
-
-  const currentSlot = slots.find(s => s.id === activeSlot) ?? slots[0]
 
   return (
     <div className={styles.page}>
-      {/* ── Top toolbar ── */}
+
+      {/* ── Command toolbar ── */}
       <div className={styles.toolbar}>
         <div className={styles.toolbarLeft}>
-          <span className={styles.toolbarTitle}>
-            📊 Charts
-            <InfoTooltip
-              page={PAGE}
-              title="StockMind Native Charts"
-              content="Professional candlestick charts powered by Lightweight Charts (open source). Data sourced directly from Yahoo Finance via our backend — no third-party popups or restrictions. Supports all NSE/BSE stocks, indices, crypto, forex, and commodities."
-              example={{ text: 'Select any symbol from the watchlist. Toggle EMA, Bollinger Bands, VWAP overlays. Switch between Candle, Bar, Line, and Area chart types.' }}
-            />
-          </span>
+          <span className={styles.toolbarTitle}>CHARTS</span>
 
-          {/* Layout selector */}
-          <div className={styles.layoutBtns} role="group" aria-label="Chart layout">
-            <span className={styles.layoutLabel}>
-              Layout
-              <InfoTooltip
-                page={PAGE}
-                title="Chart Layout"
-                content="Single: one full-screen chart. Split: two charts side by side. Quad: four charts in a 2×2 grid. Each chart has its own symbol and interval."
-                example={{ text: 'Use Quad to compare NIFTY50, BANKNIFTY, RELIANCE, and BTCUSDT simultaneously.' }}
-              />
-            </span>
+          <div className={styles.segmented} role="group" aria-label="Layout">
             {LAYOUTS.map(l => (
-              <button
-                key={l.id}
-                className={`${styles.layoutBtn} ${layout === l.id ? styles.layoutBtnActive : ''}`}
-                onClick={() => setLayout(l.id)}
-                title={l.label}
-                aria-pressed={layout === l.id}
-              >
-                {l.icon}
+              <button key={l.id} title={l.title}
+                className={`${styles.segBtn} ${layout === l.id ? styles.segBtnActive : ''}`}
+                onClick={() => setLayout(l.id)} aria-pressed={layout === l.id}>
+                {l.label}
               </button>
             ))}
           </div>
 
-          {/* Interval selector for active slot */}
-          <div className={styles.intervalBtns} role="group" aria-label="Chart interval">
-            <span className={styles.intervalLabel}>
-              Interval
-              <InfoTooltip
-                page={PAGE}
-                title="Chart Interval (Timeframe)"
-                content="The time period each candle represents. 1m = 1 minute per candle. 1D = 1 day per candle. Shorter intervals show intraday moves; longer intervals show trends."
-                example={{ text: 'For intraday trading use 5m or 15m. For swing trades use 1D. For long-term investing use 1W or 1M.' }}
-              />
-            </span>
+          <div className={styles.segmented} role="group" aria-label="Chart type">
+            {CHART_TYPES.map(ct => (
+              <button key={ct.id} title={ct.label}
+                className={`${styles.segBtn} ${currentSlot.chartType === ct.id ? styles.segBtnActive : ''}`}
+                onClick={() => updateSlot(activeSlot, { chartType: ct.id })}
+                aria-pressed={currentSlot.chartType === ct.id}>
+                {ct.label}
+              </button>
+            ))}
+          </div>
+
+          <div className={styles.segmented} role="group" aria-label="Interval">
             {INTERVALS.map(iv => (
-              <button
-                key={iv.value}
-                className={`${styles.intervalBtn} ${currentSlot.interval === iv.value ? styles.intervalBtnActive : ''}`}
-                onClick={() => setSlotInterval(activeSlot, iv.value)}
-              >
+              <button key={iv.value}
+                className={`${styles.segBtn} ${currentSlot.interval === iv.value ? styles.segBtnActive : ''}`}
+                onClick={() => updateSlot(activeSlot, { interval: iv.value })}>
                 {iv.label}
               </button>
             ))}
           </div>
+
+          <div className={styles.segmented} role="group" aria-label="Scale mode">
+            {['NORMAL','LOG','%'].map((m, i) => {
+              const val = ['normal','log','percent'][i]
+              return (
+                <button key={val}
+                  className={`${styles.segBtn} ${scaleMode === val ? styles.segBtnActive : ''}`}
+                  onClick={() => setScaleMode(val)}>
+                  {m}
+                </button>
+              )
+            })}
+          </div>
         </div>
 
         <div className={styles.toolbarRight}>
-          {/* Watchlist toggle */}
           <button
-            className={`${styles.toolbarBtn} ${showWatchlist ? styles.toolbarBtnActive : ''}`}
-            onClick={() => setShowWatchlist(s => !s)}
-            title="Toggle watchlist"
-          >
-            ☰ Watchlist
+            className={`${styles.toolbarBtn} ${symbolStripOpen ? styles.toolbarBtnActive : ''}`}
+            onClick={() => setSymbolStripOpen(o => !o)}>
+            ☰
           </button>
         </div>
       </div>
 
+      {/* ── Compact symbol strip — replaces wide sidebar ── */}
+      {symbolStripOpen && (
+        <div className={styles.symbolStrip}>
+          <input
+            className={styles.stripSearch}
+            placeholder="Search symbol…"
+            value={stripSearch}
+            onChange={e => setStripSearch(e.target.value)}
+            autoFocus
+          />
+          <div className={styles.stripScroll}>
+            {MARKET_MODULES.flatMap(mod =>
+              mod.symbols
+                .filter(s => !stripSearch ||
+                  s.symbol.toLowerCase().includes(stripSearch.toLowerCase()) ||
+                  s.label.toLowerCase().includes(stripSearch.toLowerCase())
+                )
+                .slice(0, stripSearch ? 40 : 6)
+                .map(sym => {
+                  const ch = liveChanges[sym.symbol]
+                  return (
+                    <button key={`${mod.id}:${sym.symbol}`}
+                      className={`${styles.stripChip} ${currentSlot.symbol === sym.symbol ? styles.stripChipActive : ''}`}
+                      onClick={() => { updateSlot(activeSlot, { symbol: sym.symbol, exchange: mod.exchange }); setSymbolStripOpen(false) }}>
+                      <span className={styles.stripMod}>{mod.icon}</span>
+                      <span className={styles.stripSym}>{sym.symbol}</span>
+                      {ch && (
+                        <span className={ch.changePct >= 0 ? styles.changePos : styles.changeNeg}>
+                          {ch.changePct >= 0 ? '+' : ''}{ch.changePct.toFixed(2)}%
+                        </span>
+                      )}
+                    </button>
+                  )
+                })
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ── Indicator bar ── */}
       <div className={styles.indicatorBar}>
-        <span className={styles.indicatorLabel}>
-          Overlays
-          <InfoTooltip page={PAGE} title="Overlay Indicators" content="Drawn directly on the price chart." />
-        </span>
-        {INDICATOR_PRESETS.filter(i => i.group === 'overlay').map(ind => (
+        <span className={styles.indicatorLabel}>OVL</span>
+        {OVERLAYS.map(ind => (
           <button key={ind.id}
-            className={`${styles.indicatorChip} ${activeIndicators.includes(ind.id) ? styles.indicatorChipActive : ''}`}
-            onClick={() => toggleIndicator(ind.id)} aria-pressed={activeIndicators.includes(ind.id)}
-            title={INDICATOR_INFO[ind.id]}>
+            className={`${styles.indicatorChip} ${indicators.includes(ind.id) ? styles.indicatorChipActive : ''}`}
+            onClick={() => toggleIndicator(ind.id)} aria-pressed={indicators.includes(ind.id)}>
             {ind.label}
           </button>
         ))}
         <span className={styles.indicatorSep}>│</span>
-        <span className={styles.indicatorLabel}>
-          Sub-panes
-          <InfoTooltip page={PAGE} title="Sub-pane Indicators" content="Rendered in separate panels below the main chart. RSI, MACD, Stochastic, ATR." />
-        </span>
-        {INDICATOR_PRESETS.filter(i => i.group === 'pane').map(ind => (
+        <span className={styles.indicatorLabel}>SUB</span>
+        {SUB_PANES.map(ind => (
           <button key={ind.id}
-            className={`${styles.indicatorChip} ${activeIndicators.includes(ind.id) ? styles.indicatorChipActive : ''}`}
-            onClick={() => toggleIndicator(ind.id)} aria-pressed={activeIndicators.includes(ind.id)}
-            title={INDICATOR_INFO[ind.id]}>
+            className={`${styles.indicatorChip} ${indicators.includes(ind.id) ? styles.indicatorChipActive : ''}`}
+            onClick={() => toggleIndicator(ind.id)} aria-pressed={indicators.includes(ind.id)}>
             {ind.label}
           </button>
         ))}
       </div>
 
-      {/* ── Main area ── */}
+      {/* ── Full-width chart grid — no sidebar ── */}
       <div className={styles.main}>
-        {/* Watchlist sidebar */}
-        {showWatchlist && (
-          <aside className={styles.watchlist}>
-            <div className={styles.watchlistHeader}>
-              <span>
-                Watchlist
-                <InfoTooltip
-                  page={PAGE}
-                  title="Watchlist"
-                  content="All symbols grouped by market module. Click any symbol to load it in the active chart slot. The active slot is highlighted with a colored border."
-                  example={{ text: 'In Split or Quad layout, click a chart first to make it active, then click a symbol to load it there.' }}
-                />
-              </span>
-            </div>
-
-            {/* Module symbols */}
-            {MARKET_MODULES.map(mod => (
-              <div key={mod.id} className={styles.watchlistGroup}>
-                <div className={styles.watchlistGroupTitle}>
-                  {mod.icon} {mod.label}
-                </div>
-                {mod.symbols.slice(0, 8).map(sym => (
-                  <button
-                    key={sym.symbol}
-                    className={`${styles.watchlistItem} ${currentSlot.symbol === sym.symbol ? styles.watchlistItemActive : ''}`}
-                    onClick={() => setSlotSymbol(activeSlot, sym.symbol, mod.exchange)}
-                  >
-                    <span className={styles.watchlistSymbol}>{sym.symbol}</span>
-                    <span className={styles.watchlistLabel}>{sym.label}</span>
-                  </button>
-                ))}
-              </div>
-            ))}
-          </aside>
-        )}
-
-        {/* Chart grid */}
         <div className={`${styles.chartGrid} ${styles[`grid_${layout}`]}`}>
           {visibleSlots.map((slot, idx) => (
-            <div
-              key={slot.id}
+            <div key={slot.id}
               className={`${styles.chartSlot} ${activeSlot === slot.id ? styles.chartSlotActive : ''}`}
-              onClick={() => setActiveSlot(slot.id)}
-            >
-              {/* Slot header */}
-              <div className={styles.slotHeader}>
+              onClick={() => setActiveSlot(slot.id)}>
+              <div className={styles.slotHeader} onClick={e => e.stopPropagation()}>
                 <SymbolSelector
                   symbol={slot.symbol}
                   exchange={slot.exchange}
-                  onSelect={(sym, exch) => setSlotSymbol(slot.id, sym, exch)}
+                  onSelect={(sym, exch) => updateSlot(slot.id, { symbol: sym, exchange: exch })}
                 />
-                <span className={styles.slotInterval}>{slot.interval}</span>
-                {slotCount > 1 && (
-                  <span className={styles.slotNum}>Chart {idx + 1}</span>
-                )}
+                {slotCount > 1 && <span className={styles.slotNum}>#{idx + 1}</span>}
               </div>
-
-              {/* StockChart — our own native chart, no popups */}
               <ErrorBoundary fallbackMessage="Chart unavailable">
                 <StockChart
                   symbol={slot.symbol}
                   exchange={slot.exchange}
                   interval={slot.interval}
-                  activeIndicators={activeIndicators}
+                  activeIndicators={indicators}
+                  chartType={slot.chartType}
+                  scaleMode={scaleMode}
                   className={styles.tvChart}
                 />
               </ErrorBoundary>
@@ -304,50 +339,46 @@ export default function ChartsPage() {
   )
 }
 
-// ── Symbol selector dropdown ──────────────────────────────────────────────────
+// ── Symbol selector ───────────────────────────────────────────────────────────
 
 function SymbolSelector({ symbol, exchange, onSelect }) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
+  const ref = useRef(null)
 
   const allSymbols = MARKET_MODULES.flatMap(m =>
-    m.symbols.map(s => ({ ...s, exchange: m.exchange, moduleLabel: m.label, moduleIcon: m.icon }))
+    m.symbols.map(s => ({ ...s, exchange: m.exchange, moduleIcon: m.icon }))
   )
-
   const filtered = search
     ? allSymbols.filter(s =>
         s.symbol.toLowerCase().includes(search.toLowerCase()) ||
         s.label.toLowerCase().includes(search.toLowerCase())
-      )
-    : allSymbols
+      ).slice(0, 30)
+    : allSymbols.slice(0, 30)
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return
+    function h(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', h)
+    return () => document.removeEventListener('mousedown', h)
+  }, [open])
 
   return (
-    <div className={styles.symbolSelector}>
-      <button
-        className={styles.symbolBtn}
-        onClick={() => setOpen(o => !o)}
-        aria-expanded={open}
-      >
+    <div className={styles.symbolSelector} ref={ref}>
+      <button className={styles.symbolBtn} onClick={() => setOpen(o => !o)} aria-expanded={open}>
         <span className={styles.symbolBtnText}>{symbol}</span>
         <span className={styles.symbolBtnArrow}>▼</span>
       </button>
-
       {open && (
         <div className={styles.symbolDropdown}>
-          <input
-            className={styles.symbolSearch}
-            placeholder="Search symbol…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            autoFocus
-          />
+          <input className={styles.symbolSearch} placeholder="Search…"
+            value={search} onChange={e => setSearch(e.target.value)} autoFocus />
           <div className={styles.symbolList}>
-            {filtered.slice(0, 30).map(s => (
-              <button
-                key={`${s.exchange}:${s.symbol}`}
+            {filtered.map(s => (
+              <button key={`${s.exchange}:${s.symbol}`}
                 className={`${styles.symbolOption} ${s.symbol === symbol ? styles.symbolOptionActive : ''}`}
-                onClick={() => { onSelect(s.symbol, s.exchange); setOpen(false); setSearch('') }}
-              >
+                onClick={() => { onSelect(s.symbol, s.exchange); setOpen(false); setSearch('') }}>
                 <span className={styles.symbolOptionSym}>{s.symbol}</span>
                 <span className={styles.symbolOptionLabel}>{s.label}</span>
                 <span className={styles.symbolOptionExch}>{s.moduleIcon}</span>

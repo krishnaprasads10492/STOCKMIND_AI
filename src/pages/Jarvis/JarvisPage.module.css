@@ -1,12 +1,38 @@
 .page { padding: var(--space-6); max-width: 1400px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--space-5); }
 
 /* Header */
-.header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--space-4); }
+.header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--space-4); padding: var(--space-5); background: rgba(0,212,255,0.03); border: 1px solid rgba(0,212,255,0.1); border-radius: var(--radius-xl); position: relative; overflow: hidden; }
+.header::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(0,212,255,0.4), rgba(168,85,247,0.3), transparent); }
 .headerLeft { display: flex; align-items: center; gap: var(--space-4); }
-.jarvisLogo { display: flex; align-items: center; gap: var(--space-3); }
-.jarvisIcon { font-size: 2.5rem; filter: drop-shadow(0 0 12px var(--color-ai)); }
-.title { font-size: var(--text-3xl); font-weight: 900; color: var(--color-text-primary); letter-spacing: -0.02em; background: linear-gradient(135deg, var(--color-accent), var(--color-ai)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
-.subtitle { font-size: var(--text-xs); color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.1em; }
+.jarvisLogo { display: flex; align-items: center; gap: var(--space-4); }
+
+/* JARVIS arc reactor orb */
+.jarvisOrbIcon {
+  width: 56px; height: 56px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, rgba(0,220,255,0.3), rgba(0,0,0,0.8) 70%);
+  border: 1px solid rgba(0,212,255,0.4);
+  display: flex; align-items: center; justify-content: center;
+  position: relative;
+  box-shadow: 0 0 0 4px rgba(0,212,255,0.06), 0 0 24px rgba(0,212,255,0.3);
+  animation: orbPulse 3s ease-in-out infinite;
+}
+@keyframes orbPulse {
+  0%,100% { box-shadow: 0 0 0 4px rgba(0,212,255,0.08), 0 0 24px rgba(0,212,255,0.35); }
+  50%      { box-shadow: 0 0 0 2px rgba(0,212,255,0.04), 0 0 12px rgba(0,212,255,0.15); }
+}
+.jarvisOrbCore { font-size: 1.4rem; font-weight: 900; color: var(--color-accent); text-shadow: 0 0 16px rgba(0,212,255,0.8); position: relative; z-index: 1; }
+.jarvisOrbRingA, .jarvisOrbRingB {
+  position: absolute; inset: -8px; border-radius: 50%;
+  border: 1px solid rgba(0,212,255,0.15);
+  animation: ringSpinA 8s linear infinite;
+}
+.jarvisOrbRingB { inset: -14px; border-color: rgba(168,85,247,0.1); animation-name: ringSpinB; animation-duration: 14s; animation-direction: reverse; }
+@keyframes ringSpinA { from { transform:rotate(0deg); } to { transform:rotate(360deg); } }
+@keyframes ringSpinB { from { transform:rotate(0deg); } to { transform:rotate(360deg); } }
+
+.title { font-size: var(--text-3xl); font-weight: 900; letter-spacing: -0.02em; background: linear-gradient(135deg, var(--color-accent) 0%, var(--color-ai) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; text-shadow: none; }
+.subtitle { font-size: var(--text-xs); color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.12em; }
 .statusPill { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1) var(--space-3); border-radius: var(--radius-full); font-size: var(--text-xs); font-weight: 700; letter-spacing: 0.08em; border: 1px solid; }
 .statusOnline { background: var(--color-bull-dim); border-color: var(--color-bull); color: var(--color-bull); }
 .statusOffline { background: var(--color-bear-dim); border-color: var(--color-bear); color: var(--color-bear); }

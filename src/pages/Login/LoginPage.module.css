@@ -5,26 +5,97 @@
   justify-content: center;
   background: var(--color-bg-base);
   padding: var(--space-4);
-  /* Subtle radial glow behind the card */
+  overflow: hidden;
+  position: relative;
+  /* Deep space + arc reactor glow */
   background-image:
-    radial-gradient(ellipse 60% 50% at 50% 40%, rgba(0,212,255,0.06) 0%, transparent 70%),
+    radial-gradient(ellipse 70% 60% at 50% 40%, rgba(0,220,255,0.08) 0%, transparent 65%),
+    radial-gradient(ellipse 40% 30% at 20% 70%, rgba(168,85,247,0.06) 0%, transparent 60%),
+    radial-gradient(ellipse 40% 30% at 80% 20%, rgba(0,255,157,0.04) 0%, transparent 60%),
     linear-gradient(var(--grid-line) 1px, transparent 1px),
     linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
-  background-size: 100% 100%, 40px 40px, 40px 40px;
+  background-size: 100% 100%, 100% 100%, 100% 100%, 48px 48px, 48px 48px;
+}
+
+/* Animated orbital rings behind card */
+.page::before,
+.page::after {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  animation: arcReactorSpin linear infinite;
+}
+.page::before {
+  width: 600px; height: 600px;
+  border: 1px solid rgba(0,212,255,0.06);
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  animation-duration: 40s;
+}
+.page::after {
+  width: 400px; height: 400px;
+  border: 1px solid rgba(168,85,247,0.06);
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  animation-duration: 25s;
+  animation-direction: reverse;
+}
+
+@keyframes arcReactorSpin {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to   { transform: translate(-50%, -50%) rotate(360deg); }
 }
 
 .card {
   width: 100%;
   max-width: 420px;
-  background: var(--color-bg-surface);
-  border: 1px solid var(--color-border);
+  background: rgba(8,15,26,0.92);
+  border: 1px solid rgba(0,212,255,0.2);
   border-radius: var(--radius-xl);
   padding: var(--space-10) var(--space-8);
-  box-shadow: var(--shadow-lg), 0 0 40px rgba(0,212,255,0.08);
+  box-shadow:
+    0 0 0 1px rgba(0,212,255,0.1),
+    0 0 60px rgba(0,212,255,0.12),
+    0 8px 40px rgba(0,0,0,0.8);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: var(--space-3);
+  position: relative;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* Card corner brackets — HUD style */
+.card::before, .card::after {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+}
+.card::before {
+  top: -1px; left: -1px;
+  width: 20px; height: 20px;
+  border-top: 2px solid var(--color-accent);
+  border-left: 2px solid var(--color-accent);
+  border-radius: var(--radius-sm) 0 0 0;
+}
+.card::after {
+  bottom: -1px; right: -1px;
+  width: 20px; height: 20px;
+  border-bottom: 2px solid var(--color-ai);
+  border-right: 2px solid var(--color-ai);
+  border-radius: 0 0 var(--radius-sm) 0;
+}
+
+/* Scan line that moves down the card */
+.card .scanLine {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(0,212,255,0.6), transparent);
+  animation: scanDown 4s ease-in-out infinite;
+  pointer-events: none;
 }
 
 /* ── Logo ── */
@@ -37,18 +108,38 @@
 }
 
 .logoIcon {
-  width: 56px;
-  height: 56px;
-  background: var(--color-bg-elevated);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  width: 64px;
+  height: 64px;
+  background: radial-gradient(circle at 40% 40%, rgba(0,220,255,0.2), rgba(0,0,0,0) 70%);
+  border: 1px solid rgba(0,212,255,0.35);
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 0 20px rgba(0,212,255,0.15);
+  box-shadow:
+    0 0 0 8px rgba(0,212,255,0.04),
+    0 0 0 16px rgba(0,212,255,0.02),
+    0 0 40px rgba(0,212,255,0.25);
+  animation: jarvisPulse 3s ease-in-out infinite;
+  position: relative;
 }
 
-/* ── Title — NO gradient trick, plain colour so it's always visible ── */
+/* Outer spinning ring */
+.logoIcon::before {
+  content: '';
+  position: absolute;
+  inset: -10px;
+  border-radius: 50%;
+  border: 1px dashed rgba(0,212,255,0.2);
+  animation: arcReactorSpin 8s linear infinite;
+}
+
+@keyframes jarvisPulse {
+  0%, 100% { box-shadow: 0 0 0 8px rgba(0,212,255,0.04), 0 0 0 16px rgba(0,212,255,0.02), 0 0 40px rgba(0,212,255,0.3); }
+  50%       { box-shadow: 0 0 0 6px rgba(0,212,255,0.02), 0 0 0 12px rgba(0,212,255,0.01), 0 0 20px rgba(0,212,255,0.15); }
+}
+
+/* Title */
 .title {
   font-size: var(--text-2xl);
   font-weight: 800;
@@ -61,6 +152,7 @@
 .titleAI {
   color: var(--color-accent);
   font-style: italic;
+  text-shadow: 0 0 20px rgba(0,212,255,0.5);
 }
 
 .subtitle {
@@ -766,4 +858,20 @@
 .step1KeygenLink:hover {
   color: #f59e0b;
   background: rgba(245,158,11,0.08);
+}
+
+/* ── Scan line animation ── */
+.scanLine {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent 0%, rgba(0,212,255,0.7) 50%, transparent 100%);
+  pointer-events: none;
+  animation: scanDown 4s ease-in-out infinite;
+  z-index: 2;
+}
+@keyframes scanDown {
+  0%   { top: 0;    opacity: 0.8; }
+  80%  { opacity: 0.3; }
+  100% { top: 100%; opacity: 0; }
 }

@@ -320,7 +320,8 @@ export default function LoginPage() {
   return (
     <div className={styles.page}>
       <div className={styles.card}>
-
+        {/* Animated HUD scan line */}
+        <span className={styles.scanLine} aria-hidden="true" />
         {/* ── Logo + title ── */}
         <div className={styles.logoWrap}>
           <div className={styles.logoIcon} aria-hidden="true">

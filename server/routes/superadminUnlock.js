@@ -194,4 +194,106 @@ router.post('/unlock', unlockLimiter, async (req, res) => {
   })
 })
 
+// ── POST /api/superadmin/vault-update ─────────────────────────────────────────
+// Update vault credentials + passphrase. Requires current passphrase to proceed.
+// Rate limited: 2 attempts per 30 min. Super-admin session required.
+// This is the ONLY legitimate way to modify admin.vault.
+
+const updateLimiter = rateLimit({
+  windowMs: 30 * 60 * 1000,
+  max: 2,
+  standardHeaders: true,
+  legacyHeaders:   false,
+  message: { error: 'Too many vault update attempts. Try again in 30 minutes.' },
+})
+
+router.post('/vault-update', updateLimiter, async (req, res) => {
+  const ip = req.ip ?? 'unknown'
+
+  // Must be authenticated as super-admin via session token
+  const sessionToken = req.headers['x-session-token']
+  if (!sessionToken) return res.status(401).json({ error: 'Session token required' })
+
+  // Validate inputs
+  const {
+    currentPassphrase,
+    newPassphrase,
+    newUsername,
+    newPassword,
+  } = req.body
+
+  if (!currentPassphrase || typeof currentPassphrase !== 'string') {
+    return res.status(400).json({ error: 'currentPassphrase required' })
+  }
+  if (!newPassphrase || typeof newPassphrase !== 'string' || newPassphrase.length < 4) {
+    return res.status(400).json({ error: 'newPassphrase required (min 4 chars)' })
+  }
+  if (!newUsername || typeof newUsername !== 'string') {
+    return res.status(400).json({ error: 'newUsername required' })
+  }
+  if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 8) {
+    return res.status(400).json({ error: 'newPassword required (min 8 chars)' })
+  }
+
+  // Load and verify current vault with current passphrase
+  const vault = loadVault()
+  if (!vault) {
+    return res.status(404).json({ error: 'No vault found on this system' })
+  }
+
+  const correct = verifyPassphrase(currentPassphrase, vault)
+  req.body.currentPassphrase = ''.padEnd(currentPassphrase.length, '*')
+
+  if (!correct) {
+    auditLog('vault_update_wrong_passphrase', { ip })
+    return res.status(401).json({ error: 'Current passphrase is incorrect' })
+  }
+
+  // Build new vault
+  try {
+    const newSalt      = crypto.randomBytes(32).toString('hex')
+    const newKey       = deriveKey(newPassphrase, newSalt)
+    const newVerifier  = hmacVerifier(newPassphrase, newSalt)
+    const newCreds     = [{
+      username: newUsername.trim(),
+      password: newPassword,
+      role:     'super-admin',
+    }]
+    const encrypted    = encrypt(JSON.stringify(newCreds), newKey)
+
+    req.body.newPassphrase = ''.padEnd(newPassphrase.length, '*')
+    req.body.newPassword   = ''.padEnd(newPassword.length, '*')
+
+    const newVault = {
+      version:     2,
+      salt:        newSalt,
+      verifier:    newVerifier,
+      credentials: encrypted,
+      createdAt:   new Date().toISOString(),
+      app:         APP_ID,
+    }
+
+    // Remove read-only before writing
+    try { fs.chmodSync(VAULT_PATH, 0o644) } catch {}
+    fs.writeFileSync(VAULT_PATH, JSON.stringify(newVault, null, 2), 'utf8')
+    // Re-lock immediately
+    try { fs.chmodSync(VAULT_PATH, 0o444) } catch {}
+
+    auditLog('vault_updated', { ip, username: newUsername.trim() })
+    return res.json({ ok: true, message: 'Vault updated and locked.' })
+  } catch (e) {
+    auditLog('vault_update_failed', { ip, error: e.message?.slice(0, 80) })
+    return res.status(500).json({ error: 'Vault update failed' })
+  }
+})
+
+// ── Encrypt helper (used by vault-update) ─────────────────────────────────────
+function encrypt(plaintext, key) {
+  const iv     = crypto.randomBytes(12)
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv)
+  const ct     = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()])
+  const tag    = cipher.getAuthTag()
+  return `${iv.toString('hex')}:${tag.toString('hex')}:${ct.toString('hex')}`
+}
+
 export default router
