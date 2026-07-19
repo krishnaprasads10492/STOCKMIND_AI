@@ -34,6 +34,7 @@ import { createUser, loadPersistedSessions } from './services/authService.js'
 import distributeRoutes     from './routes/distribute.js'
 import superadminUnlockRoutes from './routes/superadminUnlock.js'
 import docUpgradeRoutes       from './routes/docUpgrade.js'
+import { threatShield, HONEYPOT_PATHS, getThreatStats } from './middleware/threatShield.js'
 import authRoutes          from './routes/auth.js'
 import userRoutes          from './routes/users.js'
 import predictionRoutes    from './routes/predictions.js'
@@ -245,6 +246,20 @@ app.use('/api/jarvis/theme-from-image', express.json({ limit: '8mb' }))
 // Remove x-powered-by (already done by helmet, but explicit)
 app.disable('x-powered-by')
 
+// ── Threat Shield — eternal loop security protocol ────────────────────────────
+// Must be before rate limiter so traps don't consume rate limit slots.
+// Traps unauthorized bots, AI agents, scanners in infinite loops.
+app.use(threatShield)
+// Honeypot paths — attract scanners and auto-trap them
+for (const p of HONEYPOT_PATHS) {
+  app.all(p, (req, res) => {
+    // threatShield already called; this just ensures the path exists as a real route
+    // (express would 404 before threatShield even fires without this)
+    // threatShield handles honeypot detection by pattern, so we just let it fall through
+    res.status(404).end()
+  })
+}
+
 // ── Rate limiting ─────────────────────────────────────────────────────────────
 // Auth: very tight — 10 attempts per 15 min
 app.use('/api/auth/login', rateLimit({
@@ -299,6 +314,9 @@ app.use('/api/doc-upgrade',  docUpgradeRoutes)
 // ── Audit log routes (admin only) ─────────────────────────────────────────────
 app.get('/api/audit/stats',  (req, res) => res.json(getAuditStats()))
 app.get('/api/audit/verify', (req, res) => res.json(verifyAuditChain()))
+
+// ── Threat Shield stats (super-admin only — checked client-side) ──────────────
+app.get('/api/threat/stats', (req, res) => res.json(getThreatStats()))
 
 // ── AGI Health Dashboard — combines all sustaining systems ────────────────────
 app.get('/api/agi/dashboard', async (req, res) => {

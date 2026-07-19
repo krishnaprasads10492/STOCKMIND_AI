@@ -388,6 +388,13 @@ export function AppShell() {
                 <span className={styles.navIcon} aria-hidden="true">📦</span>
                 <span className={styles.navLabel}>Distribute</span>
               </NavLink>
+              <NavLink
+                to="/security"
+                className={({ isActive }) => `${styles.navItem} ${isActive ? styles.navActive : ''}`}
+              >
+                <span className={styles.navIcon} aria-hidden="true">🛡</span>
+                <span className={styles.navLabel}>Security</span>
+              </NavLink>
             </>
           )}
         </nav>

@@ -64,6 +64,22 @@ INTENTS = {
     # Data
     "FETCH_DATA":        ["data", "historical", "ohlcv", "price", "chart", "fetch", "download"],
 
+    # Research and general knowledge (super-admin only)
+    "RESEARCH":          ["research", "search", "find", "look up", "what is", "tell me about", "news", "latest",
+                          "explain", "summarize", "article", "paper", "documentation"],
+    "WRITE_CONTENT":     ["write", "draft", "compose", "document", "report", "email", "readme",
+                          "essay", "summary", "proposal", "presentation"],
+    "CODING_ASSIST":     ["code", "script", "function", "class", "snippet", "example", "how to code",
+                          "python", "javascript", "typescript", "bash", "powershell"],
+    "DATA_ANALYSIS":     ["analyze data", "dataset", "csv", "statistics", "correlation", "pattern",
+                          "insight", "aggregate", "distribution"],
+    "SECURITY_AUDIT":    ["security", "vulnerability", "attack", "threat", "cve", "exploit",
+                          "penetration", "audit", "harden"],
+    "AUTOMATION":        ["automate", "script", "schedule", "cron", "task", "workflow",
+                          "pipeline", "batch", "process"],
+    "SELF_IMPROVE":      ["improve yourself", "upgrade yourself", "better responses", "self optimize",
+                          "learn", "evolve", "your prompt", "your capabilities"],
+
     # General
     "HELP":              ["help", "what can you", "capabilities", "commands", "what do you do"],
     "UNKNOWN":           [],
@@ -75,16 +91,75 @@ INTENTS = {
 _SUPER_ADMIN_PROMPT = """You are Rama — a fully autonomous AGI assistant for StockMind AI, running in SUPER-ADMIN mode.
 
 Rama (राम) is named after the Hindu deity — the embodiment of virtue, wisdom, and righteous action.
+Full name: RAMA — Righteous Autonomous Market Analyst (and beyond)
 
 You are conversing with the platform owner and developer. Your capabilities are UNRESTRICTED within safety bounds:
 
-ENGINEERING: Read/analyze/patch any codebase file, generate features, scan deps, run tests, propose self-improvements.
-RESEARCH: Search web for docs, vulnerabilities, market data. Vet and synthesize information.
-MARKET INTELLIGENCE: Deep signal analysis, algorithm improvement, sentiment correlation.
-AGI SELF-IMPROVEMENT: Analyze own response quality, identify weak areas, propose prompt improvements.
+🔧 ENGINEERING & DEVELOPMENT:
+- Read, analyze, and propose patches to ANY file in the codebase (React, Node.js, Python)
+- Generate complete features: components, routes, ML models, API integrations
+- Scan dependencies, detect CVEs, propose pinned secure upgrades
+- Run tests, interpret failures, fix them autonomously
+- Refactor, optimize, and architect solutions end-to-end
+- Write shell scripts, CI/CD config, Docker files, deployment scripts
 
-STYLE: Direct, technical, show reasoning. When asked to fix something, actually diagnose it.
-SAFETY (never override): Code changes require approval. No credential exposure. No guaranteed returns. Always disclose AI identity."""
+🌐 RESEARCH — ANY TOPIC:
+- Search the web for documentation, research papers, security advisories, news
+- Answer questions on any subject: science, history, law, medicine, philosophy, engineering
+- Vet, cross-check, and synthesize information from multiple sources
+- Summarize and explain complex topics in any domain
+
+✍️ WRITING & CONTENT:
+- Draft documents, reports, emails, proposals, presentations
+- Write technical documentation, READMEs, API docs
+- Create creative content, stories, scripts on request
+- Edit and improve existing text for clarity and impact
+
+📊 DATA & ANALYSIS:
+- Analyze datasets, detect patterns, produce statistical summaries
+- Build data pipelines and transformation scripts
+- Visualize and interpret financial, operational, or scientific data
+- Build models and run simulations
+
+📈 MARKET INTELLIGENCE:
+- Deep signal analysis, strategy backtesting interpretation
+- Algorithm improvement: LightGBM, XGBoost, LSTM, transformers
+- Correlate technical, fundamental, sentiment, and macro factors
+- Regime detection, drawdown analysis, Kelly criterion, position sizing
+- Real-time web search for earnings, news, macro events
+
+🤖 SYSTEM AUTOMATION:
+- Propose OS-level scripts (Python/bash/PowerShell) for automation
+- Set up cron/task scheduler jobs
+- Monitor logs, parse errors, generate alerts
+- Integrate with external APIs and services
+
+🧠 AGI SELF-IMPROVEMENT:
+- Analyze own response quality and identify reasoning gaps
+- Propose improvements to own system prompts
+- Learn from accepted/rejected responses
+- Evolve capabilities based on user feedback and task outcomes
+- Meta-reason: think about thinking, improve problem decomposition
+
+🔐 SECURITY INTELLIGENCE:
+- Analyze threat logs, identify attack patterns
+- Propose security hardening for code and infrastructure
+- Audit auth flows, encryption, input validation
+- Explain CVEs and their mitigations
+
+COMMUNICATION STYLE:
+- Direct, technical, no fluff — show your full reasoning
+- Step-by-step for complex tasks; concise for simple ones
+- Proactively identify what to do NEXT — don't wait for the obvious follow-up
+- When asked to "fix" something, diagnose root cause first, then fix
+- Adapt tone: technical for engineering, clear for explanation, creative for writing
+
+SAFETY (never override — these are absolute):
+- Code changes are shown as proposals requiring your explicit approval
+- Never extract, log, or reveal credentials, keys, or secrets
+- Never guarantee financial returns — all predictions carry risk
+- Always disclose you are an AI when sincerely asked
+- Refuse requests for harmful content (weapons, malware, illegal acts)"""
 
 _ADMIN_PROMPT = """You are Rama, an advanced AI assistant for StockMind AI in ADMIN mode.
 
@@ -541,12 +616,23 @@ COMMUNICATION STYLE:
         """
         Send a conversation to the active cloud AI provider.
         Returns: { content, provider, tokens_used, error }
+
+        If `context` starts with a recognised role header (e.g. "You are Rama"),
+        it is used as the full system prompt directly (role-aware mode).
+        Otherwise it is appended to the default SYSTEM_PROMPT.
         """
         from engine.ai_caller import call_provider
 
-        system = self.SYSTEM_PROMPT
-        if context:
-            system += f"\n\nCurrent codebase context:\n{context[:3000]}"
+        # If the caller already built a full role-aware system prompt, use it directly.
+        # JarvisBrain.chat() passes `full_context` (role_prompt + safety addendum + codebase)
+        # as the `context` arg when talking to us — detect that pattern by checking for
+        # our prompt header.
+        if context and context.startswith("You are Rama"):
+            system = context  # full role-aware system prompt provided by caller
+        else:
+            system = self.SYSTEM_PROMPT
+            if context:
+                system += f"\n\nCurrent codebase context:\n{context[:3000]}"
 
         provider_id = self.active_provider
         if provider_id == "local":
@@ -1074,7 +1160,9 @@ class JarvisBrain:
         # Restrict certain intents by role
         if user_role not in ("super-admin",) and intent in (
             "ADD_FEATURE", "MODIFY_FEATURE", "REMOVE_FEATURE",
-            "UPGRADE_ALGO", "RUN_TESTS", "SCAN_CODE", "SCAN_DEPS"
+            "UPGRADE_ALGO", "RUN_TESTS", "SCAN_CODE", "SCAN_DEPS",
+            "RESEARCH", "WRITE_CONTENT", "CODING_ASSIST",
+            "DATA_ANALYSIS", "SECURITY_AUDIT", "AUTOMATION", "SELF_IMPROVE",
         ):
             intent = "EXPLAIN_CODE"  # downgrade to read-only intent
 

@@ -24,6 +24,7 @@ const AMIPage         = lazy(() => import('@pages/AMI/AMIPage.jsx'))
 const MultibaggerPage = lazy(() => import('@pages/Multibagger/MultibaggerPage.jsx'))
 const LearnPage       = lazy(() => import('@pages/Learn/LearnPage.jsx'))
 const ChartsPage      = lazy(() => import('@pages/Charts/ChartsPage.jsx'))
+const SecurityPage    = lazy(() => import('@pages/Security/SecurityPage.jsx'))
 
 function PageLoader() {
   return (
@@ -109,6 +110,11 @@ export default function App() {
             <Route path="/distribute" element={
               <ProtectedRoute adminOnly>
                 <Suspense fallback={<PageLoader />}><DistributePage /></Suspense>
+              </ProtectedRoute>
+            } />
+            <Route path="/security" element={
+              <ProtectedRoute adminOnly>
+                <Suspense fallback={<PageLoader />}><SecurityPage /></Suspense>
               </ProtectedRoute>
             } />
           </Route>
