@@ -17,6 +17,7 @@ import { requireAuth } from '../middleware/auth.js'
 import os from 'os'
 import process from 'process'
 import crypto from 'crypto'
+import { signedHeaders } from '../utils/internalSign.js'
 import {
   appendExchange, listConversations, getConversation,
   starConversation, tagConversation, deleteConversation, getConversationStats,
@@ -36,7 +37,10 @@ async function aiGet(path, timeoutMs = 30_000) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    const res = await fetch(`${AI_URL}${path}`, { signal: controller.signal })
+    const res = await fetch(`${AI_URL}${path}`, {
+      signal:  controller.signal,
+      headers: signedHeaders(''),
+    })
     clearTimeout(timer)
     if (!res.ok) throw new Error(`AI ${res.status}`)
     return await res.json()
@@ -52,7 +56,7 @@ async function aiPost(path, body, timeoutMs = 30_000) {
   try {
     const res = await fetch(`${AI_URL}${path}`, {
       method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...signedHeaders(body) },
       body:    JSON.stringify(body),
       signal:  controller.signal,
     })

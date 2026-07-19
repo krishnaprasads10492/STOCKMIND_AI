@@ -26,7 +26,8 @@ export function requireAuth(req, res, next) {
   const token = extractToken(req)
   if (!token) return res.status(401).json({ error: 'Authentication required' })
 
-  const session = validateSession(token)
+  const ua = req.headers['user-agent'] ?? ''
+  const session = validateSession(token, ua)
   if (!session) return res.status(401).json({ error: 'Session expired or invalid' })
 
   req.user = session
@@ -40,7 +41,8 @@ export function requireAdmin(req, res, next) {
   const token = extractToken(req)
   if (!token) return res.status(401).json({ error: 'Authentication required' })
 
-  const session = validateSession(token)
+  const ua = req.headers['user-agent'] ?? ''
+  const session = validateSession(token, ua)
   if (!session) return res.status(401).json({ error: 'Session expired or invalid' })
   if (session.role !== 'admin' && session.role !== 'super-admin') return res.status(403).json({ error: 'Admin access required' })
 
@@ -57,7 +59,8 @@ export function requireSuperAdmin(req, res, next) {
   const token = extractToken(req)
   if (!token) return res.status(401).json({ error: 'Authentication required' })
 
-  const session = validateSession(token)
+  const ua = req.headers['user-agent'] ?? ''
+  const session = validateSession(token, ua)
   if (!session) return res.status(401).json({ error: 'Session expired or invalid' })
   if (session.role !== 'super-admin') return res.status(403).json({ error: 'Super-admin access required' })
 
@@ -74,7 +77,8 @@ export function requireSelfOrAdmin(paramName = 'userId') {
     const token = extractToken(req)
     if (!token) return res.status(401).json({ error: 'Authentication required' })
 
-    const session = validateSession(token)
+    const ua = req.headers['user-agent'] ?? ''
+    const session = validateSession(token, ua)
     if (!session) return res.status(401).json({ error: 'Session expired or invalid' })
 
     const targetId = req.params[paramName]

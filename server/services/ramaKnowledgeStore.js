@@ -20,6 +20,7 @@
 import crypto from 'crypto'
 import { getMongoService } from './mongoService.js'
 import { writeSecure, readSecure, listSecure, deleteSecure } from '../storage/fileStore.js'
+import { encryptDoc, decryptDoc } from '../storage/mongoEncryption.js'
 
 const LOCAL_PREFIX = 'rama_knowledge'
 const MAX_ENTRIES_FREE_TIER = 2000   // conservative limit for Atlas free (512MB)
@@ -106,7 +107,7 @@ export async function saveKnowledgeEntry({
   try {
     const col = await getCol()
     if (col) {
-      await col.insertOne({ ...doc, _createdAt: new Date() })
+      await col.insertOne(encryptDoc('rama_knowledge', { ...doc, _createdAt: new Date() }))
       // Trigger background consolidation check (non-blocking)
       checkAndConsolidate().catch(() => {})
       return id
@@ -144,7 +145,7 @@ export async function listKnowledge({
         col.countDocuments(filter),
       ])
       return {
-        entries: docs.map(({ _createdAt, ...r }) => r),
+        entries: docs.map(({ _createdAt, ...r }) => decryptDoc('rama_knowledge', r)),
         total, page, pages: Math.ceil(total / lim),
       }
     }
@@ -177,7 +178,7 @@ export async function getKnowledgeEntry(id) {
       const doc = await col.findOne({ _id: id })
       if (!doc) return null
       const { _createdAt, ...rest } = doc
-      return rest
+      return decryptDoc('rama_knowledge', rest)
     }
   } catch { /* fallback */ }
   return localRead(id)
@@ -326,7 +327,7 @@ export async function runConsolidation({ batchSize = CONSOLIDATE_BATCH, type = n
       }
 
       if (col) {
-        await col.insertOne({ ...newEntry, _createdAt: new Date() })
+        await col.insertOne(encryptDoc('rama_knowledge', { ...newEntry, _createdAt: new Date() }))
         await col.deleteMany({ _id: { $in: ids } })
       } else {
         localWrite(newEntry._id, newEntry)

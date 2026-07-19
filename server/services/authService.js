@@ -264,6 +264,7 @@ export function loginStep2(stepToken, key) {
     step:         2,
     expiresAt:    Date.now() + SESSION_TTL_MS,
     lastActivity: Date.now(),
+    ua:           '',  // will be bound on first validateSession call
   })
 
   writeSecure(userPath(user.userId), {
@@ -290,10 +291,22 @@ export function loginStep2(stepToken, key) {
 
 // ── Session validation ────────────────────────────────────────────────────────
 
-export function validateSession(token) {
+export function validateSession(token, ua = '') {
   pruneExpired()
   const sess = sessions.get(token)
   if (!sess || sess.step !== 2) return null
+
+  // UA fingerprint binding — prevents session reuse from a different browser/UA
+  if (sess.ua === '') {
+    // First request after login: bind the UA now
+    sess.ua = ua
+  } else if (sess.ua !== ua) {
+    // UA mismatch — possible session token theft/reuse from different browser
+    console.warn('[Auth] UA fingerprint mismatch — possible session hijack, invalidating token')
+    sessions.delete(token)
+    persistSessions()
+    return null
+  }
 
   // Slide expiry on activity
   const now = Date.now()

@@ -27,7 +27,8 @@ if (fs.existsSync(_envPath)) {
     }
   }
 }
-import { initEncryption, existsSecure } from './storage/fileStore.js'
+import { requireAuth, requireAdmin, requireSuperAdmin } from './middleware/auth.js'
+import { initEncryption, existsSecure, getStorageStats } from './storage/fileStore.js'
 import { initAuditLog, auditLog, verifyAuditChain, queryAuditLog, getAuditStats } from './storage/auditLog.js'
 import { DB } from './storage/dbAdapter.js'
 import { createUser, loadPersistedSessions } from './services/authService.js'
@@ -64,6 +65,7 @@ import { getIntegrationStatus } from './config/integrations.js'
 import { CACHE } from './storage/memCache.js'
 import { getSessionRecord, getMarketContext, getSessionHistory, cleanupOldSessions } from './services/marketSessionStore.js'
 import { connectMongo, getMongoStatus } from './services/mongoService.js'
+import { initMongoEncryption } from './storage/mongoEncryption.js'
 import {
   startAIGrowthWorker, stopAIGrowthWorker, pauseAIGrowthWorker, resumeAIGrowthWorker,
   getGrowthWorkerStatus, getUpgradeProposals, approveProposal, dismissProposal,
@@ -75,14 +77,28 @@ const DIST_DIR  = path.resolve(__dirname, '../build')
 const PORT = process.env.PORT ?? 4098
 
 // ── DATA_PASSWORD ─────────────────────────────────────────────────────────────
-// Set via environment variable. Default is only for first-run convenience.
-// Once data is written, you MUST use the same password every time.
-const DATA_PASSWORD = process.env.DATA_PASSWORD ?? 'stockmind-local-dev-password'
+// Set via environment variable. MUST be a strong, unique password in production.
+// Once data is written you MUST use the same password every time.
+const DATA_PASSWORD = process.env.DATA_PASSWORD
+if (
+  !DATA_PASSWORD ||
+  DATA_PASSWORD.length < 16 ||
+  DATA_PASSWORD === 'change-this-to-a-very-strong-random-password-before-first-run'
+) {
+  console.error(
+    '[SECURITY] DATA_PASSWORD is not set or is using the default placeholder. ' +
+    'Set a strong password in .env before running.'
+  )
+  if (process.env.NODE_ENV === 'production') process.exit(1)
+  // In dev: use a fixed-but-distinct dev password so data is still encrypted
+}
+const _dataPassword = DATA_PASSWORD ?? 'stockmind-DEV-ONLY-not-for-production-12345'
 
 // Init encryption (async — Argon2id preferred)
 async function initSecurity() {
-  await initEncryption(DATA_PASSWORD)
-  initAuditLog(DATA_PASSWORD)
+  await initEncryption(_dataPassword)
+  initAuditLog(_dataPassword)
+  initMongoEncryption(_dataPassword)
   await DB.init()
   // Restore sessions from disk — users stay logged in across server restarts
   loadPersistedSessions()
@@ -312,70 +328,70 @@ app.use('/api/distribute',   distributeRoutes)
 app.use('/api/doc-upgrade',  docUpgradeRoutes)
 
 // ── Audit log routes (admin only) ─────────────────────────────────────────────
-app.get('/api/audit/stats',  (req, res) => res.json(getAuditStats()))
-app.get('/api/audit/verify', (req, res) => res.json(verifyAuditChain()))
+app.get('/api/audit/stats',  requireAdmin, (req, res) => res.json(getAuditStats()))
+app.get('/api/audit/verify', requireAdmin, (req, res) => res.json(verifyAuditChain()))
+app.get('/api/audit/query',  requireAdmin, (req, res) => {
+  const { event, userId, limit = 100 } = req.query
+  res.json(queryAuditLog({ event, userId, limit: Number(limit) }))
+})
 
-// ── Threat Shield stats (super-admin only — checked client-side) ──────────────
-app.get('/api/threat/stats', (req, res) => res.json(getThreatStats()))
+// ── Threat Shield stats (super-admin only) ───────────────────────────────────
+app.get('/api/threat/stats', requireSuperAdmin, (req, res) => res.json(getThreatStats()))
 
 // ── AGI Health Dashboard — combines all sustaining systems ────────────────────
-app.get('/api/agi/dashboard', async (req, res) => {
+app.get('/api/agi/dashboard', requireAdmin, async (req, res) => {
   try { res.json(await AGI_DASHBOARD.getFullStatus()) }
   catch (e) { res.status(500).json({ ok: false, error: e.message }) }
 })
-app.get('/api/agi/scenarios', (req, res) => {
+app.get('/api/agi/scenarios', requireAdmin, (req, res) => {
   res.json({ ok: true, scenarios: SCENARIO_LIB.getAll(), stats: SCENARIO_LIB.getStats() })
 })
-app.post('/api/agi/scenarios/record', (req, res) => {
+app.post('/api/agi/scenarios/record', requireAdmin, (req, res) => {
   const { error = '', context = '', fix = '', resolved = false } = req.body
   if (!error) return res.status(400).json({ error: 'error field required' })
   SCENARIO_LIB.record(error, context, fix, resolved)
   res.json({ ok: true })
 })
-app.get('/api/agi/scenarios/lookup', (req, res) => {
+app.get('/api/agi/scenarios/lookup', requireAdmin, (req, res) => {
   const err = String(req.query.error ?? '')
   if (!err) return res.status(400).json({ error: 'error query param required' })
   res.json({ ok: true, ...SCENARIO_LIB.lookup(err) })
 })
-app.get('/api/agi/health-notes', (req, res) => {
+app.get('/api/agi/health-notes', requireAdmin, (req, res) => {
   const level = req.query.level ?? null
   const n     = Math.min(Number(req.query.n ?? 50), 200)
   res.json({ ok: true, notes: HEALTH_NOTES.getRecent(n, level) })
 })
-app.get('/api/agi/vulnerabilities', async (req, res) => {
+app.get('/api/agi/vulnerabilities', requireAdmin, async (req, res) => {
   try {
     const force = req.query.force === 'true'
     const data  = force ? await VULN_SCANNER.scanAll() : VULN_SCANNER.getCached()
     res.json({ ok: true, ...data })
   } catch (e) { res.status(500).json({ ok: false, error: e.message }) }
 })
-app.post('/api/agi/consolidate', async (req, res) => {
+app.post('/api/agi/consolidate', requireSuperAdmin, async (req, res) => {
   try { res.json({ ok: true, ...(await AGI_DASHBOARD.consolidate()) }) }
   catch (e) { res.status(500).json({ ok: false, error: e.message }) }
 })
-app.get('/api/agi/git-status', (req, res) => {
+app.get('/api/agi/git-status', requireAdmin, (req, res) => {
   res.json({ ok: true, ...SELF_UPDATE.getStatus() })
 })
-app.post('/api/agi/git-push', async (req, res) => {
+app.post('/api/agi/git-push', requireSuperAdmin, async (req, res) => {
   const { message = 'auto-save', files = [] } = req.body
   try { res.json(await SELF_UPDATE.commitAndPush(message, files)) }
   catch (e) { res.status(500).json({ ok: false, error: e.message }) }
 })
-app.get('/api/audit/query',  (req, res) => {
-  const { event, userId, limit = 100 } = req.query
-  res.json(queryAuditLog({ event, userId, limit: Number(limit) }))
-})
 
 // ── DB health ─────────────────────────────────────────────────────────────────
-app.get('/api/db/health', async (req, res) => {
+app.get('/api/db/health', requireAdmin, async (req, res) => {
   const adapterHealth = await DB.healthCheck()
   const mongoStatus   = getMongoStatus()
   res.json({ ...adapterHealth, mongoAtlas: mongoStatus })
 })
 
 // ── Storage stats ─────────────────────────────────────────────────────────────
-app.get('/api/storage/stats', (req, res) => res.json(getStorageStats()))
-app.post('/api/storage/cache/clear', (req, res) => {
+app.get('/api/storage/stats', requireAdmin, (req, res) => res.json(getStorageStats()))
+app.post('/api/storage/cache/clear', requireAdmin, (req, res) => {
   CACHE.clear()
   res.json({ ok: true, message: 'In-memory cache cleared' })
 })
@@ -402,14 +418,14 @@ app.get('/api/market/session/:symbol/history', (req, res) => {
 })
 
 // ── Integration status ────────────────────────────────────────────────────────
-app.get('/api/integrations/status', (req, res) => res.json(getIntegrationStatus()))
+app.get('/api/integrations/status', requireAuth, (req, res) => res.json(getIntegrationStatus()))
 
 // Outcome validator status
-app.get('/api/validator/status', (req, res) => res.json(getValidatorStatus()))
+app.get('/api/validator/status', requireAuth, (req, res) => res.json(getValidatorStatus()))
 
 // SSE endpoint — real-time outcome events for the frontend
 // GET /api/validator/events
-app.get('/api/validator/events', (req, res) => {
+app.get('/api/validator/events', requireAuth, (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream')
   res.setHeader('Cache-Control', 'no-cache')
   res.setHeader('Connection', 'keep-alive')
@@ -429,41 +445,41 @@ app.get('/api/validator/events', (req, res) => {
 })
 
 // ── AI Growth Worker API ──────────────────────────────────────────────────────
-app.get('/api/growth-worker/status', (req, res) => res.json(getGrowthWorkerStatus()))
-app.get('/api/growth-worker/proposals', (req, res) => {
+app.get('/api/growth-worker/status', requireAuth, (req, res) => res.json(getGrowthWorkerStatus()))
+app.get('/api/growth-worker/proposals', requireAuth, (req, res) => {
   const limit = Math.min(Number(req.query.limit ?? 20), 50)
   res.json({ proposals: getUpgradeProposals(limit) })
 })
-app.get('/api/growth-worker/accuracy-matrix', (req, res) => {
+app.get('/api/growth-worker/accuracy-matrix', requireAuth, (req, res) => {
   const { symbol, timeframe, instrType } = req.query
   res.json({ matrix: getAccuracyMatrix({ symbol, timeframe, instrType }) })
 })
-app.post('/api/growth-worker/start', (req, res) => {
+app.post('/api/growth-worker/start', requireAdmin, (req, res) => {
   startAIGrowthWorker()
   res.json({ ok: true, status: getGrowthWorkerStatus() })
 })
-app.post('/api/growth-worker/stop', (req, res) => {
+app.post('/api/growth-worker/stop', requireAdmin, (req, res) => {
   stopAIGrowthWorker()
   res.json({ ok: true, status: getGrowthWorkerStatus() })
 })
-app.post('/api/growth-worker/pause', (req, res) => {
+app.post('/api/growth-worker/pause', requireAdmin, (req, res) => {
   pauseAIGrowthWorker()
   res.json({ ok: true, status: getGrowthWorkerStatus() })
 })
-app.post('/api/growth-worker/resume', (req, res) => {
+app.post('/api/growth-worker/resume', requireAdmin, (req, res) => {
   resumeAIGrowthWorker()
   res.json({ ok: true, status: getGrowthWorkerStatus() })
 })
-app.post('/api/growth-worker/proposals/:id/approve', (req, res) => {
+app.post('/api/growth-worker/proposals/:id/approve', requireAdmin, (req, res) => {
   const ok = approveProposal(req.params.id)
   res.json({ ok })
 })
-app.post('/api/growth-worker/proposals/:id/dismiss', (req, res) => {
+app.post('/api/growth-worker/proposals/:id/dismiss', requireAdmin, (req, res) => {
   const ok = dismissProposal(req.params.id)
   res.json({ ok })
 })
 // SSE stream for growth worker events
-app.get('/api/growth-worker/events', (req, res) => {
+app.get('/api/growth-worker/events', requireAuth, (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream')
   res.setHeader('Cache-Control', 'no-cache')
   res.setHeader('Connection', 'keep-alive')

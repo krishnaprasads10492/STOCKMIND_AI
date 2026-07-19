@@ -29,6 +29,7 @@
 
 import { MongoClient } from 'mongodb'
 import { CACHE } from '../storage/memCache.js'
+import { encryptDoc, decryptDoc, decryptDocs } from '../storage/mongoEncryption.js'
 
 const DB_NAME = process.env.MONGODB_DB ?? 'stockmind'
 
@@ -232,7 +233,8 @@ class MongoCollection {
 
   async upsert(id, data) {
     const col   = await this._col()
-    const clean = _stripSensitive({ ...data, _id: id, _updatedAt: new Date() })
+    const stripped = _stripSensitive({ ...data, _id: id, _updatedAt: new Date() })
+    const clean = encryptDoc(this.name, stripped)
     await col.replaceOne({ _id: id }, clean, { upsert: true })
     CACHE.set(`mongo:${this.name}:${id}`, data, 30_000)
   }
@@ -244,8 +246,9 @@ class MongoCollection {
     const doc = await col.findOne({ _id: id })
     if (!doc) return null
     const { _id, _updatedAt, ...rest } = doc
-    CACHE.set(`mongo:${this.name}:${id}`, rest, 30_000)
-    return rest
+    const decrypted = decryptDoc(this.name, rest)
+    CACHE.set(`mongo:${this.name}:${id}`, decrypted, 30_000)
+    return decrypted
   }
 
   async findOne(filter) {
@@ -253,13 +256,13 @@ class MongoCollection {
     const doc = await col.findOne(filter)
     if (!doc) return null
     const { _id, _updatedAt, ...rest } = doc
-    return rest
+    return decryptDoc(this.name, rest)
   }
 
   async find(filter = {}, { limit = 100, sort = { _updatedAt: -1 }, skip = 0 } = {}) {
     const col  = await this._col()
     const docs = await col.find(filter).sort(sort).skip(skip).limit(limit).toArray()
-    return docs.map(({ _id, _updatedAt, ...rest }) => ({ ...rest, _id }))
+    return docs.map(({ _id, _updatedAt, ...rest }) => ({ ...decryptDoc(this.name, rest), _id }))
   }
 
   async deleteById(id) {
@@ -275,7 +278,8 @@ class MongoCollection {
 
   async insertOne(doc) {
     const col = await this._col()
-    const clean = _stripSensitive({ ...doc, _createdAt: new Date(), _updatedAt: new Date() })
+    const stripped = _stripSensitive({ ...doc, _createdAt: new Date(), _updatedAt: new Date() })
+    const clean = encryptDoc(this.name, stripped)
     return col.insertOne(clean)
   }
 

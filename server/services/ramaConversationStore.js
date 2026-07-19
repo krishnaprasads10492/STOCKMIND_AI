@@ -30,6 +30,7 @@
 import crypto from 'crypto'
 import { getMongoService } from './mongoService.js'
 import { writeSecure, readSecure, existsSecure, listSecure, deleteSecure } from '../storage/fileStore.js'
+import { encryptDoc, decryptDoc } from '../storage/mongoEncryption.js'
 
 const LOCAL_PREFIX = 'rama_conversations'
 const MAX_MESSAGES_PER_CONV = 200  // hard cap per conversation
@@ -105,7 +106,7 @@ export async function initConversation(convId, { userId, username, userRole }) {
   try {
     const col = await getCollection()
     if (col) {
-      await col.insertOne({ ...doc, _createdAt: new Date() })
+      await col.insertOne(encryptDoc('rama_conversations', { ...doc, _createdAt: new Date() }))
       return
     }
   } catch { /* fallback */ }
@@ -142,36 +143,48 @@ export async function appendExchange(convId, exchange, meta = {}) {
   try {
     const col = await getCollection()
     if (col) {
+      // Build the $set object, encrypting sensitive fields before write
+      const baseSet = {
+        lastMessageAt: now,
+        provider:      exchange.provider ?? 'local',
+        _updatedAt:    new Date(),
+      }
+      const firstSet = exchange.isFirst ? {
+        userId:    hashUserId(meta.userId),
+        userRole:  ['super-admin', 'admin', 'user'].includes(meta.userRole) ? meta.userRole : 'user',
+        startedAt: now,
+      } : {}
+
+      // Encrypt string fields that need it
+      const encTitle    = exchange.isFirst ? encryptDoc('rama_conversations', { title: autoTitle(exchange.userMessage) }).title : undefined
+      const encUsername = exchange.isFirst ? encryptDoc('rama_conversations', { username: String(meta.username ?? 'unknown').slice(0, 50) }).username : undefined
+      const encMessages = encryptDoc('rama_conversations', { messages: [userMsg, assistantMsg] }).messages
+
+      const setObj = {
+        ...baseSet,
+        ...firstSet,
+        ...(encTitle    !== undefined ? { title:    encTitle    } : {}),
+        ...(encUsername !== undefined ? { username: encUsername } : {}),
+      }
+
       // Upsert — creates the doc if initConversation was skipped
       await col.updateOne(
         { _id: convId },
         {
-          $set: {
-            lastMessageAt: now,
-            provider:      exchange.provider ?? 'local',
-            _updatedAt:    new Date(),
-            // Set title from first user message if still default
-            ...(exchange.isFirst ? {
-              title:  autoTitle(exchange.userMessage),
-              userId: hashUserId(meta.userId),
-              username: String(meta.username ?? 'unknown').slice(0, 50),
-              userRole: ['super-admin', 'admin', 'user'].includes(meta.userRole) ? meta.userRole : 'user',
-              startedAt: now,
-            } : {}),
-          },
+          $set: setObj,
           $inc: {
             messageCount: 2,
             totalTokens:  Number(exchange.tokens ?? 0),
           },
           $push: {
             messages: {
-              $each:  [userMsg, assistantMsg],
+              $each:  encMessages,
               $slice: -MAX_MESSAGES_PER_CONV,  // keep last N messages
             },
           },
           $setOnInsert: {
-            starred:   false,
-            tags:      [],
+            starred:    false,
+            tags:       [],
             _createdAt: new Date(),
           },
         },
@@ -239,7 +252,7 @@ export async function listConversations({ page = 1, limit = 25, search = '', use
       ])
 
       return {
-        conversations: docs.map(({ _createdAt, _updatedAt, ...rest }) => rest),
+        conversations: docs.map(({ _createdAt, _updatedAt, ...rest }) => decryptDoc('rama_conversations', rest)),
         total,
         page,
         pages: Math.ceil(total / lim),
@@ -279,7 +292,7 @@ export async function getConversation(convId) {
       const doc = await col.findOne({ _id: convId })
       if (!doc) return null
       const { _createdAt, _updatedAt, ...rest } = doc
-      return rest
+      return decryptDoc('rama_conversations', rest)
     }
   } catch { /* fallback */ }
   return localRead(convId)
@@ -366,7 +379,7 @@ export async function getConversationStats() {
         totalMessages:      agg?.totalMessages ?? 0,
         totalTokens:        agg?.totalTokens   ?? 0,
         byRole,
-        recentConversations: recent.map(({ _createdAt, _updatedAt, ...r }) => r),
+        recentConversations: recent.map(({ _createdAt, _updatedAt, ...r }) => decryptDoc('rama_conversations', r)),
       }
     }
   } catch { /* fallback */ }
