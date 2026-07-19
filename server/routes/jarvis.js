@@ -429,14 +429,20 @@ router.post('/brain/chat', requireAuth, async (req, res) => {
   if (!message || typeof message !== 'string' || message.trim().length === 0) {
     return res.status(400).json({ error: 'message required' })
   }
-  if (message.length > 2000) {
-    return res.status(400).json({ error: 'message too long (max 2000 chars)' })
+  if (message.length > 3000) {
+    return res.status(400).json({ error: 'message too long (max 3000 chars)' })
   }
   try {
+    // Pass hashed session ID for per-user rate limiting in the Python safety layer
+    const crypto = await import('crypto')
+    const sessionHash = crypto.default.createHash('sha256')
+      .update(req.user?.userId ?? 'anon').digest('hex').slice(0, 32)
+
     const data = await aiPost('/jarvis/brain/chat', {
-      conv_id:   conv_id ?? null,
-      message:   message.trim(),
-      use_cloud: use_cloud !== false,
+      conv_id:    conv_id ?? null,
+      message:    message.trim(),
+      use_cloud:  use_cloud !== false,
+      session_id: sessionHash,
     }, 45_000)
     res.json(data)
   } catch (err) {

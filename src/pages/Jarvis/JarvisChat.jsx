@@ -113,32 +113,33 @@ export default function JarvisChat({ token }) {
     try {
       let response
       if (useAgent) {
-        // Use full AGI stack
         response = await agiExecute(text.trim(), convId, true, token)
         if (!convId && response.conv_id) setConvId(response.conv_id)
       } else {
-        // Use direct brain chat
         response = await brainChat(text.trim(), convId, useCloud, token)
         if (!convId && response.conv_id) setConvId(response.conv_id)
       }
 
       const assistantMsg = {
-        id:          Date.now() + 1,
-        role:        'assistant',
-        content:     response.result ?? response.response ?? 'No response',
-        timestamp:   Date.now(),
-        intent:      response.intent,
-        confidence:  response.confidence,
-        provider:    response.provider ?? response.active_provider,
-        mode:        response.mode,
-        agent:       response.agent,
-        agent_emoji: response.agent_emoji,
-        steps:       response.steps ?? [],
+        id:               Date.now() + 1,
+        role:             'assistant',
+        content:          response.result ?? response.response ?? 'No response',
+        timestamp:        Date.now(),
+        intent:           response.intent,
+        confidence:       response.confidence,
+        provider:         response.provider ?? response.active_provider,
+        mode:             response.mode,
+        agent:            response.agent,
+        agent_emoji:      response.agent_emoji,
+        steps:            response.steps ?? [],
         pending_approvals: response.pending_approvals ?? [],
-        suggestions: response.suggestions ?? [],
-        actions:     response.actions ?? [],
-        task_id:     response.task_id,
-        status:      response.status,
+        suggestions:      response.suggestions ?? [],
+        actions:          response.actions ?? [],
+        task_id:          response.task_id,
+        status:           response.status,
+        // Safety fields
+        safety_warnings:  response.safety_warnings ?? [],
+        was_filtered:     response.was_filtered ?? false,
       }
       setMessages(prev => [...prev, assistantMsg])
 
@@ -430,6 +431,17 @@ function ChatMessage({ message: msg, onFeedback, token, isAdmin }) {
               👎
             </button>
           </>
+        )}
+        {/* Safety indicator */}
+        {msg.was_filtered && (
+          <span className={styles.safetyBadge} title="Output was reviewed by safety guardrails">
+            🛡 Safety reviewed
+          </span>
+        )}
+        {msg.safety_warnings?.length > 0 && (
+          <span className={styles.safetyWarning} title={msg.safety_warnings.join('; ')}>
+            ⚠ {msg.safety_warnings[0]}
+          </span>
         )}
       </div>
     </div>

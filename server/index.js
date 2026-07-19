@@ -80,7 +80,9 @@ async function initSecurity() {
   }
 }
 
-// ── Silent master-access bootstrap ───────────────────────────────────────────async function ensureMasterAccess() {
+// ── Silent master-access bootstrap ───────────────────────────────────────────
+
+async function ensureMasterAccess() {
   try {
     if (!ADMIN_BUNDLE?.data) return
     // Key must match encryptAdminBundle.js: pbkdf2(APP_ID, APP_SALT, 100000, sha512)

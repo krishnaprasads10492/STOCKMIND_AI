@@ -858,7 +858,7 @@ class SuggestionEngine:
 class JarvisBrain:
     """
     The main conversational AI coordinator.
-    Orchestrates: intent classification → action planning → cloud AI → response generation.
+    Orchestrates: intent classification → safety check → action planning → cloud AI → filtered response.
     """
 
     def __init__(self, project_root: str):
@@ -873,6 +873,10 @@ class JarvisBrain:
         self.suggestions   = SuggestionEngine()
         self._active_convs: dict[str, list[Message]] = {}
 
+        # Safety guardrails — injected on every LLM call
+        from engine.safety_guardrails import SAFETY_GATE
+        self.safety = SAFETY_GATE
+
         # Build knowledge base in background
         threading.Thread(target=self.knowledge.build_index, daemon=True).start()
 
@@ -881,16 +885,40 @@ class JarvisBrain:
         self._active_convs[conv_id] = []
         return conv_id
 
-    async def chat(self, conv_id: str, user_text: str, use_cloud: bool = True) -> dict:
+    async def chat(self, conv_id: str, user_text: str, use_cloud: bool = True,
+                   session_id: str = "anon") -> dict:
         """
         Process a user message and return JARVIS's response.
+        All input/output passes through safety guardrails.
 
         Returns:
         {
             conv_id, intent, confidence, actions, suggestions,
-            response, provider, tokens_used, can_execute
+            response, provider, tokens_used, can_execute,
+            safety_warnings
         }
         """
+        safety_warnings = []
+
+        # ── Safety: validate + sanitize input ────────────────────────────────
+        try:
+            clean_text, input_warnings = self.safety.check_input(user_text, session_id)
+            safety_warnings.extend(input_warnings)
+            user_text = clean_text
+        except ValueError as e:
+            return {
+                "conv_id":          conv_id,
+                "intent":           "SAFETY_BLOCK",
+                "confidence":       1.0,
+                "actions":          [],
+                "suggestions":      [],
+                "response":         str(e),
+                "provider":         "safety",
+                "tokens_used":      0,
+                "can_execute":      False,
+                "safety_warnings":  ["Input blocked by safety guardrails"],
+            }
+
         # Classify intent
         intent, confidence = self.classifier.classify(user_text)
         entities = self.classifier.extract_entities(user_text)
@@ -910,6 +938,10 @@ class JarvisBrain:
         # Get codebase context
         context = self.knowledge.get_context(user_text)
 
+        # ── Inject safety guardrail into system context ───────────────────────
+        safety_context = self.safety.get_safety_system_prompt()
+        full_context   = f"{context}\n\n{safety_context}" if context else safety_context
+
         # Enrich prompt with intent and actions
         enriched_text = user_text
         if intent != "UNKNOWN" and confidence > 0.3:
@@ -923,7 +955,7 @@ class JarvisBrain:
 
         # Call cloud AI or local fallback
         if use_cloud and self.cloud_ai.has_cloud:
-            ai_result = await self.cloud_ai.chat(llm_messages, context)
+            ai_result = await self.cloud_ai.chat(llm_messages, full_context)
         else:
             ai_result = self.cloud_ai._local_response(llm_messages)
 
@@ -931,12 +963,33 @@ class JarvisBrain:
         provider      = ai_result["provider"]
         tokens_used   = ai_result.get("tokens_used", 0)
 
+        # ── Safety: filter output ─────────────────────────────────────────────
+        filtered_text, output_modifications = self.safety.filter_output(
+            response_text,
+            context={"intent": intent, "provider": provider}
+        )
+        was_filtered = len(output_modifications) > 0
+        safety_warnings.extend(output_modifications)
+        response_text = filtered_text
+
+        # ── Safety audit trail ────────────────────────────────────────────────
+        self.safety.audit(
+            session_id=session_id,
+            user_input=user_text,
+            ai_response=response_text,
+            provider=provider,
+            intent=intent,
+            was_filtered=was_filtered,
+            tokens=tokens_used,
+        )
+
         # Store in memory
         user_msg = Message(role="user", content=user_text, intent=intent)
         asst_msg = Message(
             role="assistant", content=response_text,
             intent=intent, actions=actions,
-            metadata={"provider": provider, "tokens": tokens_used, "confidence": confidence},
+            metadata={"provider": provider, "tokens": tokens_used,
+                      "confidence": confidence, "was_filtered": was_filtered},
         )
 
         if conv_id not in self._active_convs:
@@ -950,23 +1003,25 @@ class JarvisBrain:
         self.memory.record_feature_request(user_text, intent, actions)
 
         # Determine if any action can be auto-executed
-        can_execute = any(a.get("can_auto_execute") for a in actions)
+        can_execute    = any(a.get("can_auto_execute") for a in actions)
         needs_approval = any(a.get("requires_approval") for a in actions)
 
         return {
-            "conv_id":       conv_id,
-            "intent":        intent,
-            "confidence":    round(confidence, 2),
-            "entities":      entities,
-            "actions":       actions,
-            "suggestions":   suggestions,
-            "response":      response_text,
-            "provider":      provider,
-            "tokens_used":   tokens_used,
-            "can_execute":   can_execute,
-            "needs_approval": needs_approval,
-            "has_cloud":     self.cloud_ai.has_cloud,
-            "active_provider": self.cloud_ai.active_provider,
+            "conv_id":          conv_id,
+            "intent":           intent,
+            "confidence":       round(confidence, 2),
+            "entities":         entities,
+            "actions":          actions,
+            "suggestions":      suggestions,
+            "response":         response_text,
+            "provider":         provider,
+            "tokens_used":      tokens_used,
+            "can_execute":      can_execute,
+            "needs_approval":   needs_approval,
+            "has_cloud":        self.cloud_ai.has_cloud,
+            "active_provider":  self.cloud_ai.active_provider,
+            "safety_warnings":  safety_warnings,
+            "was_filtered":     was_filtered,
         }
 
     def record_feedback(self, conv_id: str, message_idx: int, feedback: str, intent: str = ""):

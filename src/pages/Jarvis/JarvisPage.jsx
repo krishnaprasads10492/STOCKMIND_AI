@@ -339,6 +339,8 @@ function SystemTab({ token, status, isAdmin }) {
         <MetricCard label="Calibration (ECE)"   value={ml.performance?.ece_pct != null ? `${ml.performance.ece_pct}%` : '—'} icon="📐" color={ml.performance?.ece_pct <= 5 ? 'bull' : 'warn'} />
         <MetricCard label="Outcomes Tracked"    value={ml.performance?.outcomes_tracked ?? 0} icon="📋" color="neutral" />
         <MetricCard label="Drift Detected"      value={ml.performance?.drift_detected ? 'YES' : 'NO'} icon="📉" color={ml.performance?.drift_detected ? 'bear' : 'bull'} />
+        <MetricCard label="Safety: Filtered"    value={status?.safety_stats?.audit?.filtered ?? '—'} icon="🛡" color="bull" />
+        <MetricCard label="Safety: Total Calls" value={status?.safety_stats?.audit?.total ?? '—'} icon="🔒" color="neutral" />
       </div>
 
       {/* Next scan schedule */}

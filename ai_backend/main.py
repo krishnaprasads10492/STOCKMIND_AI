@@ -801,29 +801,32 @@ def jarvis_write_theme(req: ThemeWriteRequest):
 # ── JARVIS Brain (Conversational AI) endpoints ────────────────────────────────
 
 class BrainChatRequest(BaseModel):
-    conv_id:   Optional[str] = None   # None = start new conversation
-    message:   str = Field(..., min_length=1, max_length=2000)
-    use_cloud: bool = True
-
-
-class BrainFeedbackRequest(BaseModel):
-    conv_id:     str
-    message_idx: int = Field(..., ge=0)
-    feedback:    Literal["accepted", "rejected", "modified"]
-    intent:      str = Field(default="")
+    conv_id:    Optional[str] = None
+    message:    str = Field(..., min_length=1, max_length=3000)
+    use_cloud:  bool = True
+    session_id: str = Field(default="anon", max_length=64)  # from Node.js session token hash
 
 
 @app.post("/jarvis/brain/chat")
-async def jarvis_brain_chat(req: BrainChatRequest):
+async def jarvis_brain_chat(req: BrainChatRequest, request: Request):
     """
     Main conversational endpoint for JARVIS.
-    Understands natural language, plans actions, calls cloud AI if available.
+    Input passes through safety guardrails before reaching the LLM.
+    Output passes through content filtering before returning to the user.
     """
-    # Start new conversation if no conv_id provided
-    conv_id = req.conv_id or JARVIS_BRAIN.new_conversation()
+    conv_id    = req.conv_id or JARVIS_BRAIN.new_conversation()
+    # Use a hashed version of real session if provided, otherwise IP-based fallback
+    session_id = req.session_id[:32] if req.session_id and req.session_id != "anon" else (
+        request.client.host if request.client else "anon"
+    )
 
     try:
-        result = await JARVIS_BRAIN.chat(conv_id, req.message, req.use_cloud)
+        result = await JARVIS_BRAIN.chat(
+            conv_id    = conv_id,
+            user_text  = req.message,
+            use_cloud  = req.use_cloud,
+            session_id = session_id,
+        )
         return result
     except Exception as e:
         logger.error(f"[Brain] Chat error: {e}", exc_info=True)
@@ -834,6 +837,14 @@ async def jarvis_brain_chat(req: BrainChatRequest):
 def jarvis_brain_feedback(req: BrainFeedbackRequest):
     """Record user feedback on a JARVIS response to improve future suggestions."""
     JARVIS_BRAIN.record_feedback(req.conv_id, req.message_idx, req.feedback, req.intent)
+    return {"ok": True}
+
+
+@app.get("/jarvis/safety/stats")
+def jarvis_safety_stats():
+    """Return AI safety audit statistics."""
+    from engine.safety_guardrails import SAFETY_GATE
+    return SAFETY_GATE.get_stats()
     return {"ok": True}
 
 
