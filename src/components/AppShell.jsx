@@ -44,34 +44,24 @@ export function AppShell() {
   const [showNightPanel,  setShowNightPanel]  = useState(false)
   const [showKeygen,      setShowKeygen]      = useState(false)
   const [showChangePw,    setShowChangePw]    = useState(false)
-  const [jarvisToast,     setJarvisToast]     = useState(null)  // { text, type }
+  const [jarvisToast,     setJarvisToast]     = useState(null)
   const jarvisToastTimer = useRef(null)
-  const nightPanelRef = useRef(null)
+  const nightPanelRef    = useRef(null)
 
   const isSuperAdmin = user?.role === 'super-admin'
   const isLight      = activeTheme === 'light-clean'
   const mustChangePw = user?.mustChangePassword ?? false
 
-  useSessionTimeout(() => setTimeoutWarning(true))
-
-  // Listen for JARVIS actions from the orb and other components
-  useEffect(() => {
-    function handler(e) {
-      const { action, reply } = e.detail ?? {}
-      if (action) handleJarvisAction(action, reply)
-    }
-    window.addEventListener('jarvis:action', handler)
-    return () => window.removeEventListener('jarvis:action', handler)
-  }, [handleJarvisAction])
-
-  function showJarvisToast(text, type = 'info') {
+  // ── Helper: show JARVIS feedback toast ───────────────────────────────────
+  // Defined before any useCallback that calls it
+  const showJarvisToast = useCallback((text, type = 'info') => {
     clearTimeout(jarvisToastTimer.current)
     setJarvisToast({ text, type })
     jarvisToastTimer.current = setTimeout(() => setJarvisToast(null), 4000)
-  }
+  }, [])
 
-  // ── JARVIS Universal Action Dispatcher ──────────────────────────────────────
-  // Called by VoiceCommandIndicator and JarvisOrb when JARVIS resolves a command
+  // ── JARVIS Universal Action Dispatcher ────────────────────────────────────
+  // Defined before any useEffect that references it
   const handleJarvisAction = useCallback(async (action, reply) => {
     if (!action) return
     const { type } = action
@@ -81,12 +71,10 @@ export function AppShell() {
         navigate(action.to)
         break
 
-      case 'generateSignals': {
-        // Set symbol if provided, then navigate to predictions
+      case 'generateSignals':
         if (action.symbol) setActiveSymbol(action.symbol)
         navigate(`/predictions${action.symbol ? `?symbol=${action.symbol}` : ''}`)
         break
-      }
 
       case 'setSymbol':
         if (action.symbol) {
@@ -113,13 +101,11 @@ export function AppShell() {
         break
 
       case 'setChartInterval':
-        // Emit a custom event that ChartsPage can listen to
         window.dispatchEvent(new CustomEvent('jarvis:setInterval', { detail: action.interval }))
         break
 
       case 'systemScan':
         navigate('/jarvis')
-        // Trigger scan after navigation settles
         setTimeout(() => {
           window.dispatchEvent(new CustomEvent('jarvis:scan', { detail: action.scanType }))
         }, 500)
@@ -132,8 +118,6 @@ export function AppShell() {
 
       case 'addFavourite':
         if (action.symbol) {
-          const { useMarketStore: mStore } = await import('@store/marketStore.js')
-          // Can't call hooks outside — dispatch event
           window.dispatchEvent(new CustomEvent('jarvis:addFavourite', { detail: action.symbol }))
           showJarvisToast(`Added ${action.symbol} to favourites`, 'success')
         }
@@ -144,7 +128,7 @@ export function AppShell() {
         break
 
       case 'chat':
-        // Free-form response — just show toast, full response in JarvisOrb
+        // Pure Q&A — response shown in orb panel, no app action needed
         break
 
       default:
@@ -152,7 +136,35 @@ export function AppShell() {
     }
 
     if (reply) showJarvisToast(`JARVIS: ${reply.slice(0, 80)}`, 'jarvis')
-  }, [navigate, setActiveSymbol, setActiveModule, setNightLight]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [navigate, setActiveSymbol, setActiveModule, setNightLight, applyTheme, showJarvisToast]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Voice command handler ─────────────────────────────────────────────────
+  const handleVoiceCommand = useCallback(({ command, action, reply }) => {
+    if (action) {
+      handleJarvisAction(action, reply)
+      return
+    }
+    // Legacy rigid command fallback
+    switch (command) {
+      case 'STATUS': case 'SHOW_ALERTS': navigate('/jarvis'); break
+      case 'SCAN':   navigate('/jarvis'); break
+      default:       break
+    }
+  }, [navigate, handleJarvisAction])
+
+  // ── Effects — all after callbacks are defined ─────────────────────────────
+
+  useSessionTimeout(() => setTimeoutWarning(true))
+
+  // Listen for JARVIS actions dispatched from JarvisOrb and other components
+  useEffect(() => {
+    function handler(e) {
+      const { action, reply } = e.detail ?? {}
+      if (action) handleJarvisAction(action, reply)
+    }
+    window.addEventListener('jarvis:action', handler)
+    return () => window.removeEventListener('jarvis:action', handler)
+  }, [handleJarvisAction])
 
   // Close night panel on outside click
   useEffect(() => {
@@ -165,33 +177,17 @@ export function AppShell() {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  const handleVoiceCommand = useCallback(({ command, action, reply }) => {
-    // New: action-based dispatch
-    if (action) {
-      handleJarvisAction(action, reply)
-      return
-    }
-    // Legacy fallback
-    switch (command) {
-      case 'STATUS': case 'SHOW_ALERTS': navigate('/jarvis'); break
-      case 'SCAN': navigate('/jarvis'); break
-      default: break
-    }
-  }, [navigate, handleJarvisAction])
-
+  // ── Logout ────────────────────────────────────────────────────────────────
   async function handleLogout() {
     await logoutApi()
-    // Clear all caches: localStorage auth, sessionStorage, service worker cache
     clearSession()
     try {
-      // Clear any service worker caches (PWA)
       if ('caches' in window) {
         const keys = await caches.keys()
         await Promise.all(keys.map(k => caches.delete(k)))
       }
-      // Clear sessionStorage (any page-level state)
       sessionStorage.clear()
-    } catch { /* non-fatal */ }
+    } catch {}
     navigate('/login', { replace: true })
   }
 
