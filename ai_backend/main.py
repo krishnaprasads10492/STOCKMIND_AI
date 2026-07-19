@@ -854,6 +854,13 @@ async def jarvis_self_optimize():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class BrainFeedbackRequest(BaseModel):
+    conv_id:     str
+    message_idx: int = Field(..., ge=0)
+    feedback:    Literal["accepted", "rejected", "modified"]
+    intent:      str = Field(default="")
+
+
 @app.post("/jarvis/brain/feedback")
 def jarvis_brain_feedback(req: BrainFeedbackRequest):
     """Record user feedback on a JARVIS response to improve future suggestions."""
