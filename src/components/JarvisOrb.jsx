@@ -37,7 +37,6 @@ const PAGE_CONTEXT = {
   '/history':               { label: 'History',         emoji: '📋' },
   '/settings':              { label: 'Settings',        emoji: '⚙' },
   '/learn':                 { label: 'Learn',           emoji: '📚' },
-  '/charts':                { label: 'Charts',          emoji: '📊' },
 }
 
 const STATUS_META = {

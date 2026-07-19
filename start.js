@@ -241,12 +241,12 @@ function checkEnvVars() {
       ok('.env created with safe defaults')
     }
   }
-  // Load .env into process.env for this session
+  // Load .env into process.env — always overwrite so updated values take effect
   try {
     const lines = readFileSync(envPath, 'utf8').split('\n')
     for (const line of lines) {
       const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/)
-      if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '')
+      if (m) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '').trim()
     }
   } catch {}
 }

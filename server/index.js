@@ -11,6 +11,22 @@ import crypto from 'crypto'
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
+
+// ── Load .env directly — ensures vars are available regardless of how server is started ──
+const __file = fileURLToPath(import.meta.url)
+const __root = path.resolve(path.dirname(__file), '..')
+const _envPath = path.join(__root, '.env')
+if (fs.existsSync(_envPath)) {
+  for (const line of fs.readFileSync(_envPath, 'utf8').split('\n')) {
+    // Match KEY=VALUE with optional quotes and trailing comments
+    const m = line.match(/^([A-Z_][A-Z0-9_]*)=["']?([^"'\n#]+?)["']?\s*(?:#.*)?$/)
+    if (m) {
+      const key = m[1], val = m[2].trim()
+      // Always set — override stale values from parent process
+      process.env[key] = val
+    }
+  }
+}
 import { initEncryption, existsSecure } from './storage/fileStore.js'
 import { initAuditLog, auditLog, verifyAuditChain, queryAuditLog, getAuditStats } from './storage/auditLog.js'
 import { DB } from './storage/dbAdapter.js'
