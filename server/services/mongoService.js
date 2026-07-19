@@ -162,6 +162,18 @@ async function _ensureIndexes(db) {
       { key: { key: 1 }, unique: true },
     ])
 
+    // rama_conversations — Rama AI conversation history
+    await db.collection('rama_conversations').createIndexes([
+      { key: { lastMessageAt: -1 } },
+      { key: { userId: 1, lastMessageAt: -1 } },
+      { key: { username: 1 } },
+      { key: { userRole: 1 } },
+      { key: { starred: 1 } },
+      { key: { title: 'text' } },
+      // TTL — auto-delete conversations older than 365 days
+      { key: { lastMessageAt: 1 }, expireAfterSeconds: 365 * 86400, name: 'ttl_rama_conversations' },
+    ])
+
     console.log('[MongoDB] Indexes ensured for all collections')
   } catch (err) {
     console.warn('[MongoDB] Index creation warning (may already exist):', err.message)

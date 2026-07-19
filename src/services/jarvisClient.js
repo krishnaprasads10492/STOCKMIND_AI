@@ -310,3 +310,57 @@ export async function triggerSelfOptimize(token) {
   })
   return res.json()
 }
+
+// ── Conversation Store ────────────────────────────────────────────────────────
+
+export async function fetchConversationStore({ page = 1, limit = 25, search = '', userRole = '', username = '', starred } = {}, token) {
+  const params = new URLSearchParams({ page, limit })
+  if (search)   params.set('search',   search)
+  if (userRole) params.set('userRole', userRole)
+  if (username) params.set('username', username)
+  if (starred != null) params.set('starred', String(starred))
+  const res = await apiFetch(`/api/jarvis/brain/conversation-store?${params}`, {
+    headers: { 'x-session-token': token },
+  })
+  return res.json()
+}
+
+export async function fetchConversationStoreStats(token) {
+  const res = await apiFetch('/api/jarvis/brain/conversation-store/stats', {
+    headers: { 'x-session-token': token },
+  })
+  return res.json()
+}
+
+export async function fetchConversationDetail(convId, token) {
+  const res = await apiFetch(`/api/jarvis/brain/conversation-store/${convId}`, {
+    headers: { 'x-session-token': token },
+  })
+  return res.json()
+}
+
+export async function starConversationInStore(convId, starred, token) {
+  const res = await apiFetch(`/api/jarvis/brain/conversation-store/${convId}/star`, {
+    method:  'PATCH',
+    headers: { 'Content-Type': 'application/json', 'x-session-token': token },
+    body:    JSON.stringify({ starred }),
+  })
+  return res.json()
+}
+
+export async function tagConversationInStore(convId, tags, token) {
+  const res = await apiFetch(`/api/jarvis/brain/conversation-store/${convId}/tags`, {
+    method:  'PATCH',
+    headers: { 'Content-Type': 'application/json', 'x-session-token': token },
+    body:    JSON.stringify({ tags }),
+  })
+  return res.json()
+}
+
+export async function deleteConversationFromStore(convId, token) {
+  const res = await apiFetch(`/api/jarvis/brain/conversation-store/${convId}`, {
+    method:  'DELETE',
+    headers: { 'x-session-token': token },
+  })
+  return res.json()
+}

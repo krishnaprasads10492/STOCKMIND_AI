@@ -25,6 +25,7 @@ const MultibaggerPage = lazy(() => import('@pages/Multibagger/MultibaggerPage.js
 const LearnPage       = lazy(() => import('@pages/Learn/LearnPage.jsx'))
 const ChartsPage      = lazy(() => import('@pages/Charts/ChartsPage.jsx'))
 const SecurityPage    = lazy(() => import('@pages/Security/SecurityPage.jsx'))
+const RamaConversationsPage = lazy(() => import('@pages/RamaConversations/RamaConversationsPage.jsx'))
 
 function PageLoader() {
   return (
@@ -115,6 +116,11 @@ export default function App() {
             <Route path="/security" element={
               <ProtectedRoute adminOnly>
                 <Suspense fallback={<PageLoader />}><SecurityPage /></Suspense>
+              </ProtectedRoute>
+            } />
+            <Route path="/rama-conversations" element={
+              <ProtectedRoute adminOnly>
+                <Suspense fallback={<PageLoader />}><RamaConversationsPage /></Suspense>
               </ProtectedRoute>
             } />
           </Route>

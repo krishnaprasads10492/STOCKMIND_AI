@@ -16,6 +16,10 @@ import { Router } from 'express'
 import { requireAuth } from '../middleware/auth.js'
 import os from 'os'
 import process from 'process'
+import {
+  appendExchange, listConversations, getConversation,
+  starConversation, tagConversation, deleteConversation, getConversationStats,
+} from '../services/ramaConversationStore.js'
 
 const router = Router()
 const AI_URL = process.env.AI_BACKEND_URL ?? 'http://localhost:8001'
@@ -424,6 +428,7 @@ router.post('/theme-compare', requireAuth, async (req, res) => {
 // ── JARVIS Brain (Conversational AI) routes ───────────────────────────────────
 
 // POST /api/jarvis/brain/chat — main conversational endpoint
+// Persists every exchange to rama_conversations (MongoDB → local fallback)
 router.post('/brain/chat', requireAuth, async (req, res) => {
   const { conv_id, message, use_cloud } = req.body
   if (!message || typeof message !== 'string' || message.trim().length === 0) {
@@ -442,10 +447,29 @@ router.post('/brain/chat', requireAuth, async (req, res) => {
       message:    message.trim(),
       use_cloud:  use_cloud !== false,
       session_id: sessionHash,
-      // Pass the authenticated user's role — Python enforces capability tier
       user_role:  req.user?.role ?? 'user',
-    }, 60_000)  // 60s — super-admin AGI tasks can take longer
+    }, 60_000)
+
     res.json(data)
+
+    // ── Persist exchange to conversation store (fire-and-forget) ─────────────
+    // Done after res.json() so it never delays the response
+    if (data?.conv_id && !data.error) {
+      const isFirst = !conv_id  // no conv_id in request → first message
+      appendExchange(data.conv_id, {
+        userMessage:      message.trim(),
+        assistantMessage: data.response ?? '',
+        intent:           data.intent   ?? null,
+        provider:         data.provider ?? 'local',
+        tokens:           data.tokens_used ?? 0,
+        wasFiltered:      data.was_filtered ?? false,
+        isFirst,
+      }, {
+        userId:   req.user?.userId   ?? 'anon',
+        username: req.user?.username ?? 'unknown',
+        userRole: req.user?.role     ?? 'user',
+      }).catch(err => console.warn('[brain/chat] conv store error:', err.message))
+    }
   } catch (err) {
     if (err.name === 'AbortError') return res.status(504).json({ error: 'Brain timeout — AI backend may be busy' })
     res.status(503).json({ error: 'AI backend unavailable' })
@@ -533,6 +557,101 @@ router.post('/brain/rebuild-knowledge', requireAuth, async (req, res) => {
     res.json(data)
   } catch {
     res.status(503).json({ error: 'AI backend unavailable' })
+  }
+})
+
+// ── Rama Conversation Store routes ────────────────────────────────────────────
+// These read from MongoDB (not from Python) — admin/super-admin only
+
+// GET /api/jarvis/brain/conversation-store — paginated list
+router.get('/brain/conversation-store', requireAuth, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'super-admin') {
+    return res.status(403).json({ error: 'Admin only' })
+  }
+  const page     = Math.max(1,   Number(req.query.page     ?? 1))
+  const limit    = Math.min(100, Number(req.query.limit    ?? 25))
+  const search   = String(req.query.search   ?? '').trim().slice(0, 100)
+  const userRole = String(req.query.userRole ?? '').trim()
+  const username = String(req.query.username ?? '').trim().slice(0, 50)
+  const starred  = req.query.starred === 'true' ? true : req.query.starred === 'false' ? false : undefined
+  try {
+    const result = await listConversations({ page, limit, search, userRole, username, starred })
+    res.json(result)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// GET /api/jarvis/brain/conversation-store/stats
+router.get('/brain/conversation-store/stats', requireAuth, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'super-admin') {
+    return res.status(403).json({ error: 'Admin only' })
+  }
+  try {
+    res.json(await getConversationStats())
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// GET /api/jarvis/brain/conversation-store/:convId — full conversation with messages
+router.get('/brain/conversation-store/:convId', requireAuth, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'super-admin') {
+    return res.status(403).json({ error: 'Admin only' })
+  }
+  const convId = req.params.convId.replace(/[^a-f0-9-]/g, '').slice(0, 36)
+  if (!convId) return res.status(400).json({ error: 'Invalid conv_id' })
+  try {
+    const conv = await getConversation(convId)
+    if (!conv) return res.status(404).json({ error: 'Conversation not found' })
+    res.json(conv)
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// PATCH /api/jarvis/brain/conversation-store/:convId/star
+router.patch('/brain/conversation-store/:convId/star', requireAuth, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'super-admin') {
+    return res.status(403).json({ error: 'Admin only' })
+  }
+  const convId  = req.params.convId.replace(/[^a-f0-9-]/g, '').slice(0, 36)
+  const starred = Boolean(req.body?.starred)
+  try {
+    await starConversation(convId, starred)
+    res.json({ ok: true, convId, starred })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// PATCH /api/jarvis/brain/conversation-store/:convId/tags
+router.patch('/brain/conversation-store/:convId/tags', requireAuth, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'super-admin') {
+    return res.status(403).json({ error: 'Admin only' })
+  }
+  const convId = req.params.convId.replace(/[^a-f0-9-]/g, '').slice(0, 36)
+  const tags   = Array.isArray(req.body?.tags) ? req.body.tags : []
+  try {
+    await tagConversation(convId, tags)
+    res.json({ ok: true, convId, tags })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// DELETE /api/jarvis/brain/conversation-store/:convId — super-admin only
+router.delete('/brain/conversation-store/:convId', requireAuth, async (req, res) => {
+  if (req.user.role !== 'super-admin') {
+    return res.status(403).json({ error: 'Super-admin only' })
+  }
+  const convId = req.params.convId.replace(/[^a-f0-9-]/g, '').slice(0, 36)
+  if (!convId) return res.status(400).json({ error: 'Invalid conv_id' })
+  try {
+    await deleteConversation(convId)
+    res.json({ ok: true, convId })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
   }
 })
 

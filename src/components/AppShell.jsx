@@ -395,6 +395,13 @@ export function AppShell() {
                 <span className={styles.navIcon} aria-hidden="true">🛡</span>
                 <span className={styles.navLabel}>Security</span>
               </NavLink>
+              <NavLink
+                to="/rama-conversations"
+                className={({ isActive }) => `${styles.navItem} ${isActive ? styles.navActive : ''}`}
+              >
+                <span className={styles.navIcon} aria-hidden="true">💬</span>
+                <span className={styles.navLabel}>Conversations</span>
+              </NavLink>
             </>
           )}
         </nav>
