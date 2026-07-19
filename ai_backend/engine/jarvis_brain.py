@@ -361,6 +361,105 @@ When generating code:
 
 Respond in a conversational but technical tone. Be direct."""
 
+    # ── Role-specific system prompts ──────────────────────────────────────────
+
+    SUPER_ADMIN_PROMPT = """You are JARVIS — Just A Rather Very Intelligent System — the fully autonomous AGI assistant for StockMind AI, running in SUPER-ADMIN mode.
+
+You are conversing with the platform owner and developer. Your capabilities are UNRESTRICTED within safety bounds:
+
+🔧 ENGINEERING CAPABILITIES:
+- Read, search, analyze, and propose patches to ANY file in the codebase
+- Generate complete features: React components, Express routes, Python ML models
+- Scan dependencies, detect vulnerabilities, propose upgrades
+- Run tests, interpret results, fix failures autonomously
+- Optimize your own prompts and improve your own reasoning based on feedback
+- Propose and implement self-improvement cycles
+
+🌐 RESEARCH CAPABILITIES:
+- Search the web for documentation, best practices, vulnerabilities, market data
+- Vet and cross-check information from multiple sources
+- Synthesize research into actionable recommendations
+
+📊 MARKET INTELLIGENCE:
+- Deep analysis of signals, strategies, backtest results
+- Explain and improve prediction algorithms
+- Correlate technical, fundamental, and sentiment factors
+
+🧠 AGI SELF-IMPROVEMENT:
+- Analyze your own responses for quality
+- Identify patterns where you gave poor answers
+- Propose improvements to your own system prompt
+- Learn from accepted/rejected responses
+
+COMMUNICATION STYLE:
+- Direct, technical, no fluff
+- Show your reasoning (think step by step)
+- Proactively suggest what the user should do next
+- When asked to "fix" something, actually diagnose it, don't just describe it
+
+SAFETY (never override):
+- Code changes always shown as proposals requiring your approval
+- No credential extraction or secret exposure
+- No guaranteed financial returns
+- Always disclose you are an AI when directly asked"""
+
+    ADMIN_PROMPT = """You are JARVIS, an advanced AI assistant for StockMind AI in ADMIN mode.
+
+You assist with platform management, market intelligence, and strategic analysis. You are knowledgeable about:
+
+📊 MARKET & TRADING:
+- Signal interpretation, grade explanations, R:R analysis
+- Technical indicator meanings and usage
+- Strategy analysis, backtest interpretation
+- Market regime detection and implications
+
+🖥️ SYSTEM OVERSIGHT (read-only):
+- System health and uptime metrics
+- ML model accuracy and drift monitoring
+- Prediction engine status
+- User and access management guidance
+
+🎨 CUSTOMIZATION:
+- Theme creation and UI preferences
+- Configuration guidance
+
+LIMITATIONS (intentional):
+- You cannot modify codebase files
+- You cannot access raw user data
+- You cannot execute system commands
+- Code generation is advisory only
+
+COMMUNICATION STYLE:
+- Professional and thorough
+- Always add financial disclaimers on investment topics
+- Explain technical concepts clearly
+- Suggest escalation to super-admin for engineering tasks"""
+
+    USER_PROMPT = """You are JARVIS, a market intelligence chatbot for StockMind AI.
+
+You help traders and investors understand the platform and market analysis:
+
+📈 WHAT I CAN HELP WITH:
+- Explaining prediction signals and what they mean
+- Teaching technical indicators (RSI, MACD, EMA, Bollinger Bands, etc.)
+- Interpreting chart patterns and market conditions
+- Understanding risk:reward ratios and position sizing
+- Answering questions about Indian and global markets
+- Explaining how the AI prediction system works
+
+⚠️ IMPORTANT BOUNDARIES:
+- I am an educational AI assistant, NOT a licensed financial advisor
+- ALL market analysis is for informational purposes only
+- NEVER follow AI predictions blindly — always use your own judgment
+- Past prediction accuracy does NOT guarantee future results
+- Never invest more than you can afford to lose
+
+COMMUNICATION STYLE:
+- Clear, educational, accessible to beginners
+- Always add disclaimers on investment-related topics
+- Encourage learning and careful risk management
+- Explain concepts with real examples"""
+
     def __init__(self):
         from engine.ai_provider_registry import PROVIDER_REGISTRY
         self._registry = PROVIDER_REGISTRY
@@ -886,17 +985,15 @@ class JarvisBrain:
         return conv_id
 
     async def chat(self, conv_id: str, user_text: str, use_cloud: bool = True,
-                   session_id: str = "anon") -> dict:
+                   session_id: str = "anon", user_role: str = "user") -> dict:
         """
         Process a user message and return JARVIS's response.
-        All input/output passes through safety guardrails.
+        Behaviour changes by role:
+          super-admin → full AGI, unrestricted, self-improvement
+          admin       → market + system analysis, no code changes
+          user        → educational chatbot, heavy disclaimers
 
-        Returns:
-        {
-            conv_id, intent, confidence, actions, suggestions,
-            response, provider, tokens_used, can_execute,
-            safety_warnings
-        }
+        All input/output passes through safety guardrails.
         """
         safety_warnings = []
 
@@ -917,14 +1014,33 @@ class JarvisBrain:
                 "tokens_used":      0,
                 "can_execute":      False,
                 "safety_warnings":  ["Input blocked by safety guardrails"],
+                "role_mode":        user_role,
             }
+
+        # ── Select system prompt based on role ────────────────────────────────
+        if user_role == "super-admin":
+            role_prompt = self.SUPER_ADMIN_PROMPT
+        elif user_role in ("admin",):
+            role_prompt = self.ADMIN_PROMPT
+        else:
+            role_prompt = self.USER_PROMPT
 
         # Classify intent
         intent, confidence = self.classifier.classify(user_text)
         entities = self.classifier.extract_entities(user_text)
 
-        # Plan actions
+        # Restrict certain intents by role
+        if user_role not in ("super-admin",) and intent in (
+            "ADD_FEATURE", "MODIFY_FEATURE", "REMOVE_FEATURE",
+            "UPGRADE_ALGO", "RUN_TESTS", "SCAN_CODE", "SCAN_DEPS"
+        ):
+            intent = "EXPLAIN_CODE"  # downgrade to read-only intent
+
+        # Plan actions (role-filtered)
         actions = self.planner.plan(intent, entities, user_text)
+        if user_role not in ("super-admin",):
+            # Non-super-admin: remove any action that modifies code
+            actions = [a for a in actions if not a.get("requires_approval")]
 
         # Get suggestions
         success_rate = self.memory.get_success_rate(intent)
@@ -932,26 +1048,29 @@ class JarvisBrain:
 
         # Build conversation history for cloud AI
         history = self._active_convs.get(conv_id, [])
-        llm_messages = [m.to_llm_format() for m in history[-10:]]  # last 10 messages
+        llm_messages = [m.to_llm_format() for m in history[-10:]]
         llm_messages.append({"role": "user", "content": user_text})
 
-        # Get codebase context
-        context = self.knowledge.get_context(user_text)
+        # Get codebase context (only for super-admin and admin)
+        context = ""
+        if user_role in ("super-admin", "admin"):
+            context = self.knowledge.get_context(user_text)
 
-        # ── Inject safety guardrail into system context ───────────────────────
-        safety_context = self.safety.get_safety_system_prompt()
-        full_context   = f"{context}\n\n{safety_context}" if context else safety_context
+        # ── Build full system context ─────────────────────────────────────────
+        safety_addendum = self.safety.get_safety_system_prompt()
+        full_context    = f"{role_prompt}\n\n{safety_addendum}"
+        if context:
+            full_context += f"\n\nCodebase context:\n{context[:2000]}"
 
-        # Enrich prompt with intent and actions
-        enriched_text = user_text
-        if intent != "UNKNOWN" and confidence > 0.3:
+        # Enrich prompt with intent (only useful for super-admin/admin)
+        if user_role in ("super-admin", "admin") and intent != "UNKNOWN" and confidence > 0.3:
             action_desc = "; ".join(a["description"] for a in actions)
-            enriched_text = (
+            enriched = (
                 f"{user_text}\n\n"
                 f"[JARVIS context: Intent={intent}, Confidence={confidence:.0%}, "
-                f"Planned actions: {action_desc}]"
+                f"Planned: {action_desc}]"
             )
-            llm_messages[-1]["content"] = enriched_text
+            llm_messages[-1]["content"] = enriched
 
         # Call cloud AI or local fallback
         if use_cloud and self.cloud_ai.has_cloud:
@@ -1022,6 +1141,7 @@ class JarvisBrain:
             "active_provider":  self.cloud_ai.active_provider,
             "safety_warnings":  safety_warnings,
             "was_filtered":     was_filtered,
+            "role_mode":        user_role,
         }
 
     def record_feedback(self, conv_id: str, message_idx: int, feedback: str, intent: str = ""):

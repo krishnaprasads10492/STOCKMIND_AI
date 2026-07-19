@@ -1,16 +1,9 @@
 /**
- * JarvisChat — Full conversational AI interface for JARVIS.
+ * JarvisChat — Role-differentiated conversational AI interface.
  *
- * Features:
- *   - Chat with JARVIS using natural language
- *   - Supports all AI paradigms: Narrow AI, Gen AI, Agentic AI, Multi-Agent
- *   - Shows reasoning steps (ReAct loop) in real-time
- *   - Markdown rendering with code block highlighting
- *   - Feedback buttons (👍/👎) on every response
- *   - Conversation history with session persistence
- *   - Provider indicator (OpenAI / Anthropic / Gemini / Local)
- *   - Pending approvals from agentic tasks
- *   - Capabilities panel showing available tools
+ * super-admin → Full AGI: web search, code ops, self-improvement, unrestricted
+ * admin       → Advanced chatbot: market intelligence, system monitoring
+ * user        → Educational chatbot: market Q&A with disclaimers
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react'
@@ -18,73 +11,116 @@ import { useAuthStore } from '@store/authStore.js'
 import { ErrorBoundary } from '@components/ErrorBoundary.jsx'
 import {
   brainChat, brainFeedback, newConversation,
-  agiExecute, fetchAGICapabilities, agiFeedback, fetchAGIInsights,
+  agiExecute, fetchAGICapabilities, agiFeedback,
   approveJarvisAction, issueApprovalToken,
+  triggerSelfOptimize,
 } from '@services/jarvisClient.js'
 import styles from './JarvisChat.module.css'
+
+// ── Role config ───────────────────────────────────────────────────────────────
+
+const ROLE_CONFIG = {
+  'super-admin': {
+    label:       'Super-Admin AGI Mode',
+    badge:       '👑 AGI',
+    badgeColor:  '#a855f7',
+    placeholder: 'Tell JARVIS anything — search the web, modify code, optimize itself…',
+    quickPrompts: [
+      { label: '🔍 Web search',       text: 'Search the web for latest LightGBM improvements for financial time series' },
+      { label: '🧠 Improve accuracy', text: 'Analyze current ML accuracy, search for improvements, and propose upgrades' },
+      { label: '⚙ Add feature',      text: 'Add a real-time portfolio P&L tracker page' },
+      { label: '🎨 New theme',        text: 'Create a Stark JARVIS inspired theme with red gold accents' },
+      { label: '📦 Security scan',    text: 'Scan all dependencies for vulnerabilities, find patches, propose upgrades' },
+      { label: '🔧 Self-optimize',    text: 'Analyze your own response quality and improve your reasoning' },
+      { label: '📊 System deep dive', text: 'Full system audit: code health, ML drift, dependency vulnerabilities' },
+      { label: '🌐 Market research',  text: 'Search web for current NIFTY50 market analysis and macro outlook' },
+    ],
+    canSelfOptimize: true,
+    canExecuteCode:  true,
+    useAgent:        true,
+  },
+  'admin': {
+    label:       'Admin Intelligence Mode',
+    badge:       '⚡ Admin',
+    badgeColor:  '#00d4ff',
+    placeholder: 'Ask about markets, strategies, system health, prediction analysis…',
+    quickPrompts: [
+      { label: '📊 Market overview',  text: 'What is the current market regime and key indicators to watch?' },
+      { label: '🎯 Signal analysis',  text: 'How do I interpret A+ vs B grade signals?' },
+      { label: '📈 Strategy help',    text: 'What strategy fits a sideways market with low volatility?' },
+      { label: '🖥️ System health',   text: 'What is the current system health and ML accuracy?' },
+      { label: '📉 Backtest tips',    text: 'How do I interpret walk-forward backtest results?' },
+      { label: '🔍 Indicator guide',  text: 'When should I use Supertrend vs EMA crossover?' },
+    ],
+    canSelfOptimize: false,
+    canExecuteCode:  false,
+    useAgent:        false,
+  },
+  'user': {
+    label:       'Market Assistant',
+    badge:       '🤖 Assistant',
+    badgeColor:  '#00ff9d',
+    placeholder: 'Ask about signals, indicators, market analysis, trading concepts…',
+    quickPrompts: [
+      { label: '❓ What is RSI?',        text: 'Explain RSI and how to use it for trading decisions' },
+      { label: '📈 Read a signal',       text: 'How do I read and act on a prediction signal?' },
+      { label: '📊 MACD explained',      text: 'What is MACD and what does a crossover mean?' },
+      { label: '🛡 Risk management',     text: 'How should I manage risk with stop-loss orders?' },
+      { label: '🕯 Candlestick basics',  text: 'Explain the most important candlestick patterns' },
+      { label: '🧠 AI predictions',      text: 'How does the AI generate market predictions?' },
+    ],
+    canSelfOptimize: false,
+    canExecuteCode:  false,
+    useAgent:        false,
+  },
+}
 
 const PROVIDER_COLORS = {
   openai:    '#10a37f',
   anthropic: '#d97706',
   gemini:    '#4285f4',
+  groq:      '#f43f5e',
   local:     'var(--color-text-muted)',
 }
-
 const PROVIDER_LABELS = {
   openai:    'GPT-4o',
   anthropic: 'Claude',
   gemini:    'Gemini',
+  groq:      'Llama',
   local:     'Local',
 }
 
-const AGENT_EMOJIS = {
-  market_analyst: '📊',
-  code_engineer:  '⚙',
-  ml_researcher:  '🧠',
-  ui_designer:    '🎨',
-}
-
-const QUICK_PROMPTS = [
-  { label: '🎨 Create a theme',       text: 'Create a dark red cyberpunk theme called Crimson Protocol' },
-  { label: '📊 System status',        text: 'What is the current system health and ML accuracy?' },
-  { label: '🧠 Improve accuracy',     text: 'How can I improve the prediction accuracy of the ML models?' },
-  { label: '⚙ Add a feature',        text: 'Add a portfolio tracker page that shows P&L across all predictions' },
-  { label: '📦 Check dependencies',   text: 'Scan for outdated dependencies and security issues' },
-  { label: '🔍 Explain the codebase', text: 'Explain how the prediction engine works end to end' },
-  { label: '📈 Fetch NIFTY data',     text: 'Fetch the last 30 days of NIFTY50 price data' },
-  { label: '🤖 What can you do?',     text: 'What are all your capabilities?' },
-]
+// ── Component ─────────────────────────────────────────────────────────────────
 
 export default function JarvisChat({ token }) {
-  const user       = useAuthStore(s => s.user)
-  const isAdmin    = user?.role === 'admin' || user?.role === 'super-admin'
+  const user     = useAuthStore(s => s.user)
+  const role     = user?.role ?? 'user'
+  const cfg      = ROLE_CONFIG[role] ?? ROLE_CONFIG['user']
+  const isSuperAdmin = role === 'super-admin'
 
-  const [messages,     setMessages]     = useState([])
-  const [input,        setInput]        = useState('')
-  const [loading,      setLoading]      = useState(false)
-  const [convId,       setConvId]       = useState(null)
-  const [useAgent,     setUseAgent]     = useState(true)
-  const [useCloud,     setUseCloud]     = useState(true)
-  const [capabilities, setCapabilities] = useState(null)
-  const [insights,     setInsights]     = useState(null)
-  const [showCaps,     setShowCaps]     = useState(false)
-  const [error,        setError]        = useState('')
+  const [messages,      setMessages]      = useState([])
+  const [input,         setInput]         = useState('')
+  const [loading,       setLoading]       = useState(false)
+  const [convId,        setConvId]        = useState(null)
+  const [useAgent,      setUseAgent]      = useState(cfg.useAgent)
+  const [useCloud,      setUseCloud]      = useState(true)
+  const [capabilities,  setCapabilities]  = useState(null)
+  const [error,         setError]         = useState('')
+  const [selfOptLoading, setSelfOptLoading] = useState(false)
+  const [selfOptResult,  setSelfOptResult]  = useState(null)
 
-  const bottomRef  = useRef(null)
-  const inputRef   = useRef(null)
+  const bottomRef = useRef(null)
+  const inputRef  = useRef(null)
 
-  // Load capabilities on mount
   useEffect(() => {
     if (!token) return
     fetchAGICapabilities(token).then(setCapabilities).catch(() => {})
   }, [token])
 
-  // Auto-scroll to bottom on new messages
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // Start a new conversation
   async function handleNewConversation() {
     try {
       const data = await newConversation(token)
@@ -100,22 +136,20 @@ export default function JarvisChat({ token }) {
     if (!text.trim() || loading) return
     setError('')
 
-    const userMsg = {
-      id:        Date.now(),
-      role:      'user',
-      content:   text.trim(),
-      timestamp: Date.now(),
-    }
+    const userMsg = { id: Date.now(), role: 'user', content: text.trim(), timestamp: Date.now() }
     setMessages(prev => [...prev, userMsg])
     setInput('')
     setLoading(true)
 
     try {
       let response
-      if (useAgent) {
+
+      if (isSuperAdmin && useAgent) {
+        // Super-admin: full AGI ReAct loop
         response = await agiExecute(text.trim(), convId, true, token)
         if (!convId && response.conv_id) setConvId(response.conv_id)
       } else {
+        // Admin / User: brain chat (role-restricted on Python side)
         response = await brainChat(text.trim(), convId, useCloud, token)
         if (!convId && response.conv_id) setConvId(response.conv_id)
       }
@@ -130,36 +164,31 @@ export default function JarvisChat({ token }) {
         provider:         response.provider ?? response.active_provider,
         mode:             response.mode,
         agent:            response.agent,
-        agent_emoji:      response.agent_emoji,
         steps:            response.steps ?? [],
         pending_approvals: response.pending_approvals ?? [],
         suggestions:      response.suggestions ?? [],
         actions:          response.actions ?? [],
-        task_id:          response.task_id,
-        status:           response.status,
-        // Safety fields
         safety_warnings:  response.safety_warnings ?? [],
         was_filtered:     response.was_filtered ?? false,
+        role_mode:        response.role_mode ?? role,
       }
       setMessages(prev => [...prev, assistantMsg])
 
     } catch (err) {
-      setError(err?.message ?? 'Failed to get response — is the AI backend running?')
+      const msg = err?.message ?? 'Connection failed'
+      setError(msg)
       setMessages(prev => [...prev, {
-        id:        Date.now() + 1,
-        role:      'error',
-        content:   err?.message ?? 'Connection failed',
-        timestamp: Date.now(),
+        id: Date.now() + 1, role: 'error', content: msg, timestamp: Date.now()
       }])
     } finally {
       setLoading(false)
       inputRef.current?.focus()
     }
-  }, [loading, convId, useAgent, useCloud, token])
+  }, [loading, convId, useAgent, useCloud, token, isSuperAdmin, role])
 
   async function handleFeedback(msg, feedback) {
     try {
-      if (useAgent) {
+      if (useAgent && isSuperAdmin) {
         await agiFeedback(msg.content, feedback, msg.intent ?? '', token)
       } else {
         const idx = messages.findIndex(m => m.id === msg.id)
@@ -167,89 +196,115 @@ export default function JarvisChat({ token }) {
           await brainFeedback(convId, idx, feedback, msg.intent ?? '', token)
         }
       }
-      // Update message with feedback
-      setMessages(prev => prev.map(m =>
-        m.id === msg.id ? { ...m, feedback } : m
-      ))
-    } catch { /* ignore */ }
+      setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, feedback } : m))
+    } catch {}
+  }
+
+  async function handleSelfOptimize() {
+    if (!isSuperAdmin) return
+    setSelfOptLoading(true)
+    setSelfOptResult(null)
+    try {
+      const result = await triggerSelfOptimize(token)
+      setSelfOptResult(result)
+      // Show in chat as a system message
+      setMessages(prev => [...prev, {
+        id:        Date.now(),
+        role:      'system',
+        content:   result.status === 'proposal_generated'
+          ? `🧠 **Self-optimization proposal:**\n\n${result.proposal}\n\n*Acceptance rate: ${result.insights?.acceptance_rate}%*`
+          : `Self-optimization: ${result.status}. ${result.message ?? ''}`,
+        timestamp: Date.now(),
+      }])
+    } catch (err) {
+      setError('Self-optimization failed: ' + (err?.message ?? 'unknown'))
+    } finally {
+      setSelfOptLoading(false)
+    }
   }
 
   function handleKeyDown(e) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      sendMessage(input)
-    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(input) }
   }
 
   const hasCloud = capabilities?.providers?.has_cloud ?? false
 
   return (
     <div className={styles.chat}>
-      {/* ── Chat header ── */}
+      {/* ── Header ── */}
       <div className={styles.chatHeader}>
         <div className={styles.chatHeaderLeft}>
-          <span className={styles.chatTitle}>💬 JARVIS Chat</span>
-          {capabilities && (
-            <span className={styles.providerBadge}
-              style={{ color: PROVIDER_COLORS[capabilities.providers?.active] ?? 'var(--color-text-muted)' }}>
-              {PROVIDER_LABELS[capabilities.providers?.active] ?? 'Local'}
-              {!hasCloud && ' (no cloud key)'}
+          <span
+            className={styles.roleBadge}
+            style={{ background: `${cfg.badgeColor}18`, border: `1px solid ${cfg.badgeColor}40`, color: cfg.badgeColor }}
+          >
+            {cfg.badge}
+          </span>
+          <span className={styles.chatTitle}>{cfg.label}</span>
+          {capabilities?.providers?.active && (
+            <span
+              className={styles.providerBadge}
+              style={{ color: PROVIDER_COLORS[capabilities.providers.active] ?? 'var(--color-text-muted)' }}
+            >
+              {PROVIDER_LABELS[capabilities.providers.active] ?? capabilities.providers.active}
+              {!hasCloud && ' (local)'}
             </span>
           )}
         </div>
+
         <div className={styles.chatHeaderRight}>
-          <label className={styles.toggleLabel}>
-            <input type="checkbox" checked={useAgent} onChange={e => setUseAgent(e.target.checked)} />
-            <span>🤖 Agentic</span>
-          </label>
-          {!useAgent && (
+          {/* Super-admin: agent toggle + self-optimize button */}
+          {isSuperAdmin && (
+            <>
+              <label className={styles.toggleLabel} title="Full AGI ReAct loop vs direct brain chat">
+                <input type="checkbox" checked={useAgent} onChange={e => setUseAgent(e.target.checked)} />
+                <span>🤖 AGI</span>
+              </label>
+              <button
+                className={`${styles.selfOptBtn} ${selfOptLoading ? styles.selfOptBtnLoading : ''}`}
+                type="button"
+                onClick={handleSelfOptimize}
+                disabled={selfOptLoading}
+                title="Trigger JARVIS self-improvement cycle"
+              >
+                {selfOptLoading ? '⟳ Optimizing…' : '🧬 Self-Optimize'}
+              </button>
+            </>
+          )}
+          {/* Admin: cloud toggle */}
+          {role === 'admin' && (
             <label className={styles.toggleLabel}>
               <input type="checkbox" checked={useCloud} onChange={e => setUseCloud(e.target.checked)} />
-              <span>☁ Cloud AI</span>
+              <span>☁ Cloud</span>
             </label>
           )}
-          <button className={styles.capsBtn} type="button" onClick={() => setShowCaps(s => !s)}>
-            🛠 Tools
-          </button>
           <button className={styles.newChatBtn} type="button" onClick={handleNewConversation}>
-            + New Chat
+            + New
           </button>
         </div>
       </div>
-
-      {/* ── Capabilities panel ── */}
-      {showCaps && capabilities && (
-        <div className={styles.capsPanel}>
-          <div className={styles.capsPanelTitle}>JARVIS AI Paradigms & Tools</div>
-          <div className={styles.paradigmsGrid}>
-            {capabilities.ai_paradigms?.map(p => (
-              <div key={p.name} className={styles.paradigmCard}>
-                <strong>{p.name}</strong>
-                <p>{p.description}</p>
-              </div>
-            ))}
-          </div>
-          <div className={styles.toolsGrid}>
-            {capabilities.tools?.map(t => (
-              <span key={t} className={styles.toolChip}>{t}</span>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* ── Messages ── */}
       <div className={styles.messages} aria-live="polite" aria-label="Chat messages">
         {messages.length === 0 && (
           <div className={styles.welcome}>
-            <div className={styles.welcomeIcon}>🤖</div>
-            <h3 className={styles.welcomeTitle}>JARVIS is ready</h3>
+            <div className={styles.welcomeIcon}>
+              {isSuperAdmin ? '👑' : role === 'admin' ? '⚡' : '🤖'}
+            </div>
+            <h3 className={styles.welcomeTitle}>
+              {isSuperAdmin ? 'JARVIS AGI — Full Power Mode' : role === 'admin' ? 'JARVIS Intelligence' : 'JARVIS Assistant'}
+            </h3>
             <p className={styles.welcomeText}>
-              {hasCloud
-                ? `Connected to ${PROVIDER_LABELS[capabilities?.providers?.active]}. Ask me anything — I can add features, analyze code, generate themes, fetch market data, and more.`
-                : 'Running in local mode. Set OPENAI_API_KEY, ANTHROPIC_API_KEY, or GEMINI_API_KEY in .env to unlock full AI capabilities.'}
+              {isSuperAdmin
+                ? hasCloud
+                  ? `Full AGI active via ${PROVIDER_LABELS[capabilities?.providers?.active] ?? 'cloud AI'}. I can search the web, modify code, run analysis, and improve myself. What shall we build?`
+                  : 'AGI mode active (local reasoning). Add OPENAI_API_KEY, ANTHROPIC_API_KEY, or GROQ_API_KEY in .env to unlock full cloud AI power.'
+                : role === 'admin'
+                  ? 'Market intelligence and system monitoring. Ask me about signals, strategies, indicators, or system health.'
+                  : 'Your market education assistant. Ask me about trading concepts, indicators, signals, or how the AI works.'}
             </p>
             <div className={styles.quickPrompts}>
-              {QUICK_PROMPTS.map(p => (
+              {cfg.quickPrompts.map(p => (
                 <button key={p.label} type="button" className={styles.quickPrompt}
                   onClick={() => sendMessage(p.text)}>
                   {p.label}
@@ -265,13 +320,14 @@ export default function JarvisChat({ token }) {
               message={msg}
               onFeedback={handleFeedback}
               token={token}
-              isAdmin={isAdmin}
+              isAdmin={role === 'admin' || isSuperAdmin}
+              isSuperAdmin={isSuperAdmin}
             />
           </ErrorBoundary>
         ))}
 
-        {loading && <TypingIndicator />}
-        {error && <div className={styles.errorMsg} role="alert">{error}</div>}
+        {loading && <TypingIndicator role={role} />}
+        {error && <div className={styles.errorMsg} role="alert">⚠ {error}</div>}
         <div ref={bottomRef} />
       </div>
 
@@ -283,23 +339,21 @@ export default function JarvisChat({ token }) {
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={useAgent
-            ? 'Ask JARVIS anything — it will plan and execute autonomously…'
-            : 'Ask JARVIS a question…'}
+          placeholder={cfg.placeholder}
           rows={2}
-          maxLength={3000}
+          maxLength={isSuperAdmin ? 3000 : 1000}
           disabled={loading}
           aria-label="Message input"
         />
         <div className={styles.inputFooter}>
-          <span className={styles.charCount}>{input.length}/3000</span>
+          <span className={styles.charCount}>{input.length}/{isSuperAdmin ? 3000 : 1000}</span>
           <span className={styles.inputHint}>Enter to send · Shift+Enter for newline</span>
           <button
             className={styles.sendBtn}
             type="button"
             onClick={() => sendMessage(input)}
             disabled={loading || !input.trim()}
-            aria-label="Send message"
+            aria-label="Send"
           >
             {loading ? <span className={styles.spinner} /> : '▶ Send'}
           </button>
@@ -311,7 +365,7 @@ export default function JarvisChat({ token }) {
 
 // ── Chat Message ──────────────────────────────────────────────────────────────
 
-function ChatMessage({ message: msg, onFeedback, token, isAdmin }) {
+function ChatMessage({ message: msg, onFeedback, token, isAdmin, isSuperAdmin }) {
   const [showSteps, setShowSteps] = useState(false)
 
   if (msg.role === 'user') {
@@ -324,37 +378,43 @@ function ChatMessage({ message: msg, onFeedback, token, isAdmin }) {
   }
 
   if (msg.role === 'error') {
+    return <div className={styles.errorBubble}>⚠ {msg.content}</div>
+  }
+
+  if (msg.role === 'system') {
     return (
-      <div className={styles.errorBubble}>
-        ⚠ {msg.content}
+      <div className={styles.systemMsg}>
+        <MarkdownContent content={msg.content} />
       </div>
     )
   }
 
-  // Assistant message
   const providerColor = PROVIDER_COLORS[msg.provider] ?? 'var(--color-text-muted)'
-  const agentEmoji    = msg.agent_emoji ?? AGENT_EMOJIS[msg.agent] ?? '🤖'
 
   return (
     <div className={styles.assistantMsg}>
       <div className={styles.assistantHeader}>
-        <span className={styles.assistantIcon}>{agentEmoji}</span>
+        <span className={styles.assistantIcon}>
+          {msg.role_mode === 'super-admin' ? '👑' : msg.role_mode === 'admin' ? '⚡' : '🤖'}
+        </span>
         <div className={styles.assistantMeta}>
           {msg.agent && <span className={styles.agentLabel}>{msg.agent.replace('_', ' ')}</span>}
-          {msg.mode && <span className={styles.modeLabel}>{msg.mode}</span>}
           {msg.provider && (
             <span className={styles.providerLabel} style={{ color: providerColor }}>
               {PROVIDER_LABELS[msg.provider] ?? msg.provider}
             </span>
           )}
-          {msg.intent && msg.intent !== 'UNKNOWN' && (
-            <span className={styles.intentLabel}>{msg.intent.toLowerCase().replace('_', ' ')}</span>
+          {msg.intent && msg.intent !== 'UNKNOWN' && msg.intent !== 'SAFETY_BLOCK' && (
+            <span className={styles.intentLabel}>{msg.intent.toLowerCase().replace(/_/g, ' ')}</span>
+          )}
+          {msg.intent === 'SAFETY_BLOCK' && (
+            <span className={styles.safetyBlock}>🛡 Safety</span>
           )}
         </div>
         <span className={styles.msgTime}>{formatTime(msg.timestamp)}</span>
       </div>
 
-      {/* Message content with markdown */}
+      {/* Message content */}
       <div className={styles.assistantBubble}>
         <MarkdownContent content={msg.content} />
       </div>
@@ -369,8 +429,8 @@ function ChatMessage({ message: msg, onFeedback, token, isAdmin }) {
         </div>
       )}
 
-      {/* ReAct steps */}
-      {msg.steps?.length > 0 && (
+      {/* ReAct reasoning steps — super-admin only */}
+      {isSuperAdmin && msg.steps?.length > 0 && (
         <div className={styles.stepsSection}>
           <button className={styles.stepsToggle} type="button"
             onClick={() => setShowSteps(s => !s)}>
@@ -389,7 +449,7 @@ function ChatMessage({ message: msg, onFeedback, token, isAdmin }) {
                   {step.action && (
                     <div className={styles.stepAction}>
                       <span className={styles.stepLabel}>🔧 Action:</span>
-                      <code className={styles.stepCode}>{step.action}({JSON.stringify(step.action_input)})</code>
+                      <code className={styles.stepCode}>{step.action}({JSON.stringify(step.action_input ?? {})})</code>
                     </div>
                   )}
                   {step.observation && (
@@ -404,8 +464,8 @@ function ChatMessage({ message: msg, onFeedback, token, isAdmin }) {
         </div>
       )}
 
-      {/* Pending approvals from agentic tasks */}
-      {msg.pending_approvals?.length > 0 && isAdmin && (
+      {/* Pending approvals — admin+ */}
+      {isAdmin && msg.pending_approvals?.length > 0 && (
         <div className={styles.pendingApprovals}>
           <div className={styles.pendingTitle}>🔔 Pending Approvals ({msg.pending_approvals.length})</div>
           {msg.pending_approvals.map(approval => (
@@ -414,7 +474,7 @@ function ChatMessage({ message: msg, onFeedback, token, isAdmin }) {
         </div>
       )}
 
-      {/* Feedback */}
+      {/* Feedback + safety */}
       <div className={styles.feedback}>
         {msg.feedback ? (
           <span className={styles.feedbackGiven}>
@@ -423,18 +483,13 @@ function ChatMessage({ message: msg, onFeedback, token, isAdmin }) {
         ) : (
           <>
             <button className={styles.feedbackBtn} type="button"
-              onClick={() => onFeedback(msg, 'accepted')} aria-label="Helpful">
-              👍
-            </button>
+              onClick={() => onFeedback(msg, 'accepted')} aria-label="Helpful">👍</button>
             <button className={styles.feedbackBtn} type="button"
-              onClick={() => onFeedback(msg, 'rejected')} aria-label="Not helpful">
-              👎
-            </button>
+              onClick={() => onFeedback(msg, 'rejected')} aria-label="Not helpful">👎</button>
           </>
         )}
-        {/* Safety indicator */}
         {msg.was_filtered && (
-          <span className={styles.safetyBadge} title="Output was reviewed by safety guardrails">
+          <span className={styles.safetyBadge} title="Output reviewed by safety guardrails">
             🛡 Safety reviewed
           </span>
         )}
@@ -459,7 +514,6 @@ function ApprovalCard({ approval, token }) {
     try {
       const tokenData = await issueApprovalToken(token)
       if (tokenData.token && approval.params) {
-        // Execute the actual action
         const { apiFetch } = await import('@services/apiClient.js')
         if (approval.action === 'patch_file') {
           await apiFetch('/api/jarvis/patch', {
@@ -493,19 +547,15 @@ function ApprovalCard({ approval, token }) {
   return (
     <div className={styles.approvalCard}>
       <div className={styles.approvalAction}>{approval.action}</div>
-      {approval.preview?.path && (
-        <div className={styles.approvalPath}>{approval.preview.path}</div>
-      )}
-      {approval.preview?.message && (
-        <div className={styles.approvalMsg}>{approval.preview.message}</div>
-      )}
+      {approval.preview?.path && <div className={styles.approvalPath}>{approval.preview.path}</div>}
+      {approval.preview?.message && <div className={styles.approvalMsg}>{approval.preview.message}</div>}
       <div className={styles.approvalBtns}>
-        <button className={styles.approveBtn} type="button"
-          disabled={loading} onClick={() => handleApprove(true)}>
+        <button className={styles.approveBtn} type="button" disabled={loading}
+          onClick={() => handleApprove(true)}>
           {loading ? '…' : '✓ Apply'}
         </button>
-        <button className={styles.rejectBtn} type="button"
-          disabled={loading} onClick={() => handleApprove(false)}>
+        <button className={styles.rejectBtn} type="button" disabled={loading}
+          onClick={() => handleApprove(false)}>
           ✕ Skip
         </button>
       </div>
@@ -513,30 +563,22 @@ function ApprovalCard({ approval, token }) {
   )
 }
 
-// ── Markdown renderer (lightweight, no external deps) ─────────────────────────
+// ── Markdown renderer ─────────────────────────────────────────────────────────
 
 function MarkdownContent({ content }) {
   if (!content) return null
-
-  // Split into blocks
   const blocks = content.split(/```(\w*)\n?([\s\S]*?)```/g)
   const elements = []
 
   for (let i = 0; i < blocks.length; i++) {
     if (i % 3 === 0) {
-      // Regular text — apply inline formatting
       const text = blocks[i]
       if (text.trim()) {
-        elements.push(
-          <div key={i} className={styles.mdText}>
-            {renderInline(text)}
-          </div>
-        )
+        elements.push(<div key={i} className={styles.mdText}>{renderInline(text)}</div>)
       }
     } else if (i % 3 === 1) {
-      // Language identifier — skip
+      // language identifier — skip
     } else {
-      // Code block
       const lang = blocks[i - 1] || 'text'
       const code = blocks[i]
       elements.push(
@@ -553,34 +595,19 @@ function MarkdownContent({ content }) {
       )
     }
   }
-
   return <div className={styles.mdContent}>{elements}</div>
 }
 
 function renderInline(text) {
-  // Split by bold (**text**), italic (*text*), inline code (`code`)
   const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g)
   return parts.map((part, i) => {
-    if (part.startsWith('**') && part.endsWith('**')) {
-      return <strong key={i}>{part.slice(2, -2)}</strong>
-    }
-    if (part.startsWith('*') && part.endsWith('*')) {
-      return <em key={i}>{part.slice(1, -1)}</em>
-    }
-    if (part.startsWith('`') && part.endsWith('`')) {
-      return <code key={i} className={styles.inlineCode}>{part.slice(1, -1)}</code>
-    }
-    // Render line breaks and bullet points
+    if (part.startsWith('**') && part.endsWith('**')) return <strong key={i}>{part.slice(2,-2)}</strong>
+    if (part.startsWith('*')  && part.endsWith('*'))  return <em key={i}>{part.slice(1,-1)}</em>
+    if (part.startsWith('`')  && part.endsWith('`'))  return <code key={i} className={styles.inlineCode}>{part.slice(1,-1)}</code>
     return part.split('\n').map((line, j) => {
-      if (line.startsWith('- ') || line.startsWith('• ')) {
-        return <div key={`${i}-${j}`} className={styles.mdBullet}>{line}</div>
-      }
-      if (line.startsWith('# ')) {
-        return <h3 key={`${i}-${j}`} className={styles.mdH3}>{line.slice(2)}</h3>
-      }
-      if (line.startsWith('## ')) {
-        return <h4 key={`${i}-${j}`} className={styles.mdH4}>{line.slice(3)}</h4>
-      }
+      if (line.startsWith('- ') || line.startsWith('• ')) return <div key={`${i}-${j}`} className={styles.mdBullet}>{line}</div>
+      if (line.startsWith('# '))  return <h3 key={`${i}-${j}`} className={styles.mdH3}>{line.slice(2)}</h3>
+      if (line.startsWith('## ')) return <h4 key={`${i}-${j}`} className={styles.mdH4}>{line.slice(3)}</h4>
       return line ? <span key={`${i}-${j}`}>{line}<br /></span> : <br key={`${i}-${j}`} />
     })
   })
@@ -588,13 +615,18 @@ function renderInline(text) {
 
 // ── Typing indicator ──────────────────────────────────────────────────────────
 
-function TypingIndicator() {
+function TypingIndicator({ role }) {
+  const labels = {
+    'super-admin': 'JARVIS AGI is reasoning…',
+    'admin':       'JARVIS is analyzing…',
+    'user':        'JARVIS is thinking…',
+  }
   return (
     <div className={styles.typing} aria-label="JARVIS is thinking">
       <span className={styles.typingDot} />
       <span className={styles.typingDot} />
       <span className={styles.typingDot} />
-      <span className={styles.typingLabel}>JARVIS is thinking…</span>
+      <span className={styles.typingLabel}>{labels[role] ?? 'JARVIS is thinking…'}</span>
     </div>
   )
 }

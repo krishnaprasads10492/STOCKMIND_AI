@@ -298,3 +298,15 @@ export async function generateProviderConfig(name, baseUrl, envKey, format, toke
   })
   return res.json()
 }
+
+// ── Self-optimization (super-admin only) ──────────────────────────────────────
+
+export async function triggerSelfOptimize(token) {
+  const res = await apiFetch('/api/jarvis/brain/self-optimize', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json', 'x-session-token': token },
+    body:    JSON.stringify({}),
+    timeoutMs: 60_000,
+  })
+  return res.json()
+}

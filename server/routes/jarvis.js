@@ -433,7 +433,6 @@ router.post('/brain/chat', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'message too long (max 3000 chars)' })
   }
   try {
-    // Pass hashed session ID for per-user rate limiting in the Python safety layer
     const crypto = await import('crypto')
     const sessionHash = crypto.default.createHash('sha256')
       .update(req.user?.userId ?? 'anon').digest('hex').slice(0, 32)
@@ -443,10 +442,25 @@ router.post('/brain/chat', requireAuth, async (req, res) => {
       message:    message.trim(),
       use_cloud:  use_cloud !== false,
       session_id: sessionHash,
-    }, 45_000)
+      // Pass the authenticated user's role — Python enforces capability tier
+      user_role:  req.user?.role ?? 'user',
+    }, 60_000)  // 60s — super-admin AGI tasks can take longer
     res.json(data)
   } catch (err) {
     if (err.name === 'AbortError') return res.status(504).json({ error: 'Brain timeout — AI backend may be busy' })
+    res.status(503).json({ error: 'AI backend unavailable' })
+  }
+})
+
+// POST /api/jarvis/brain/self-optimize — super-admin only
+router.post('/brain/self-optimize', requireAuth, async (req, res) => {
+  if (req.user?.role !== 'super-admin') {
+    return res.status(403).json({ error: 'Super-admin only' })
+  }
+  try {
+    const data = await aiPost('/jarvis/brain/self-optimize', {}, 60_000)
+    res.json(data)
+  } catch {
     res.status(503).json({ error: 'AI backend unavailable' })
   }
 })

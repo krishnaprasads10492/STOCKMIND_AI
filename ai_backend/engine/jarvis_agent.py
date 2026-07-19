@@ -375,12 +375,98 @@ class ToolExecutor:
             return f"Theme generation error: {e}"
 
     async def _web_search(self, query: str) -> str:
-        """Simulate web search — in production, integrate with a search API."""
+        """
+        Real web search using DuckDuckGo Instant Answer API (no API key required).
+        Falls back to summarized knowledge if the search fails.
+        Also tries Yahoo Finance for financial queries.
+        """
+        if not query:
+            return "Error: query required"
+
+        results = []
+
+        # 1. DuckDuckGo Instant Answer (free, no key)
+        try:
+            import httpx
+            import urllib.parse
+            encoded = urllib.parse.quote(query)
+            url = f"https://api.duckduckgo.com/?q={encoded}&format=json&no_html=1&skip_disambig=1"
+            async with httpx.AsyncClient(timeout=8.0, follow_redirects=True) as client:
+                resp = await client.get(url, headers={"User-Agent": "StockMindAI/1.0"})
+                if resp.status_code == 200:
+                    data = resp.json()
+                    abstract = data.get("AbstractText", "")
+                    answer   = data.get("Answer", "")
+                    related  = [r.get("Text", "") for r in data.get("RelatedTopics", [])[:3] if r.get("Text")]
+                    source   = data.get("AbstractSource", "")
+
+                    if abstract:
+                        results.append(f"**{source}:** {abstract}")
+                    if answer:
+                        results.append(f"**Direct answer:** {answer}")
+                    for r in related[:2]:
+                        if r: results.append(f"• {r}")
+        except Exception as e:
+            logger.warning(f"[WebSearch] DuckDuckGo failed: {e}")
+
+        # 2. For financial queries — fetch from Yahoo Finance API
+        finance_terms = ["stock", "nifty", "sensex", "price", "market", "equity",
+                         "crypto", "bitcoin", "gold", "oil", "forex", "rupee", "inr"]
+        is_finance_query = any(t in query.lower() for t in finance_terms)
+        if is_finance_query:
+            try:
+                import httpx, urllib.parse, re as _re
+                sym_match = _re.search(r'\b([A-Z]{2,10})\b', query.upper())
+                symbol    = sym_match.group(1) if sym_match else "NIFTY50"
+                url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}.NS?interval=1d&range=5d"
+                async with httpx.AsyncClient(timeout=6.0) as client:
+                    resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
+                    if resp.status_code == 200:
+                        data  = resp.json()
+                        chart = data.get("chart", {}).get("result", [{}])[0]
+                        meta  = chart.get("meta", {})
+                        price = meta.get("regularMarketPrice")
+                        prev  = meta.get("chartPreviousClose")
+                        name  = meta.get("shortName", symbol)
+                        if price:
+                            chg = ((price - prev) / prev * 100) if prev else 0
+                            results.append(
+                                f"**{name} ({symbol}):** ₹{price:,.2f} "
+                                f"({'▲' if chg >= 0 else '▼'}{abs(chg):.2f}% today)"
+                            )
+            except Exception as e:
+                logger.warning(f"[WebSearch] Yahoo Finance failed: {e}")
+
+        # 3. Self-improvement queries — search for latest research
+        ai_terms = ["algorithm", "machine learning", "neural network", "transformer",
+                    "model", "accuracy", "prediction", "backtest"]
+        is_ai_query = any(t in query.lower() for t in ai_terms)
+        if is_ai_query and not results:
+            try:
+                import httpx, urllib.parse
+                arxiv_url = f"https://export.arxiv.org/api/query?search_query=all:{urllib.parse.quote(query)}&start=0&max_results=3"
+                async with httpx.AsyncClient(timeout=8.0) as client:
+                    resp = await client.get(arxiv_url)
+                    if resp.status_code == 200:
+                        import re as _re
+                        titles   = _re.findall(r'<title>(.*?)</title>', resp.text)[1:4]
+                        summaries= _re.findall(r'<summary>(.*?)</summary>', resp.text, _re.S)[:2]
+                        for t in titles:
+                            results.append(f"📄 arXiv: {t.strip()}")
+                        for s in summaries[:1]:
+                            results.append(f"Abstract: {s.strip()[:200]}…")
+            except Exception as e:
+                logger.warning(f"[WebSearch] arXiv failed: {e}")
+
+        if results:
+            return "Web search results for '{}' :\n\n{}".format(query, "\n".join(results))
+
+        # Fallback: knowledge-based response
         return (
-            f"Web search for '{query}':\n"
-            f"Note: Web search integration requires a search API key (e.g., Serper, Tavily, or Bing).\n"
-            f"Set SEARCH_API_KEY in .env to enable real web search.\n"
-            f"For now, I'll use my training knowledge to answer this query."
+            f"Web search for '{query}' returned limited results. "
+            f"Based on my knowledge: I can answer this from my training data. "
+            f"For real-time data, check Yahoo Finance (finance.yahoo.com) or "
+            f"NSE India (nseindia.com) for Indian markets."
         )
 
 
@@ -682,7 +768,6 @@ class SelfImprovingPromptEngine:
         accepted = sum(1 for e in log if e["feedback"] == "accepted")
         rejected = sum(1 for e in log if e["feedback"] == "rejected")
 
-        # Intent-level analysis
         intent_stats = {}
         for entry in log:
             intent = entry.get("intent", "UNKNOWN")
@@ -697,9 +782,9 @@ class SelfImprovingPromptEngine:
                 rate = stats.get("accepted", 0) / total_intent
                 if rate < 0.5:
                     insights.append({
-                        "intent":       intent,
+                        "intent":          intent,
                         "acceptance_rate": round(rate * 100, 1),
-                        "suggestion":   f"Improve {intent} responses — only {rate*100:.0f}% accepted",
+                        "suggestion":      f"Improve {intent} responses — only {rate*100:.0f}% accepted",
                     })
 
         return {
@@ -709,6 +794,51 @@ class SelfImprovingPromptEngine:
             "insights":         insights,
             "intent_stats":     intent_stats,
         }
+
+    async def run_self_optimization_cycle(self, brain) -> dict:
+        """
+        AGI self-improvement cycle — only runs for super-admin interactions.
+        Analyzes past feedback, identifies weak areas, and generates an
+        improved prompt variant using the LLM itself.
+        Returns a proposal (never auto-applied — shown to super-admin for approval).
+        """
+        insights = self.get_improvement_insights()
+        if not insights.get("insights"):
+            return {"status": "no_improvements_needed", "insights": insights}
+
+        # Ask the LLM to generate an improved system prompt based on the weaknesses
+        weak_intents = [i["suggestion"] for i in insights["insights"][:3]]
+        prompt = (
+            f"You are improving your own system prompt for JARVIS.\n\n"
+            f"Current acceptance rate: {insights['acceptance_rate']}%\n"
+            f"Identified weak areas:\n" +
+            "\n".join(f"- {w}" for w in weak_intents) +
+            "\n\nBased on these weaknesses, write 3-5 specific improvements to add "
+            "to the JARVIS system prompt that would make responses more helpful and accepted. "
+            "Be concrete and actionable. Format as a numbered list."
+        )
+        try:
+            result = await brain.cloud_ai.chat(
+                [{"role": "user", "content": prompt}],
+                max_tokens=600
+            )
+            proposal = result["content"]
+            self._data["improvement_log"].append({
+                "timestamp": time.time(),
+                "feedback":  "self_generated",
+                "intent":    "SELF_IMPROVE",
+                "response_len": len(proposal),
+            })
+            self._save()
+            return {
+                "status":          "proposal_generated",
+                "insights":        insights,
+                "proposal":        proposal,
+                "requires_approval": True,
+                "message":         "Review and approve this prompt improvement in the JARVIS console.",
+            }
+        except Exception as e:
+            return {"status": "error", "error": str(e)}
 
 
 # ── Multi-Agent Orchestrator ──────────────────────────────────────────────────

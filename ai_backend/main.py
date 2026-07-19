@@ -804,21 +804,25 @@ class BrainChatRequest(BaseModel):
     conv_id:    Optional[str] = None
     message:    str = Field(..., min_length=1, max_length=3000)
     use_cloud:  bool = True
-    session_id: str = Field(default="anon", max_length=64)  # from Node.js session token hash
+    session_id: str = Field(default="anon", max_length=64)
+    user_role:  str = Field(default="user", max_length=20)  # super-admin | admin | user
 
 
 @app.post("/jarvis/brain/chat")
 async def jarvis_brain_chat(req: BrainChatRequest, request: Request):
     """
-    Main conversational endpoint for JARVIS.
-    Input passes through safety guardrails before reaching the LLM.
-    Output passes through content filtering before returning to the user.
+    Role-aware conversational endpoint.
+    super-admin → Full AGI (web search, code, self-improvement)
+    admin       → Market intelligence + system monitoring (read-only)
+    user        → Educational chatbot with financial disclaimers
     """
     conv_id    = req.conv_id or JARVIS_BRAIN.new_conversation()
-    # Use a hashed version of real session if provided, otherwise IP-based fallback
     session_id = req.session_id[:32] if req.session_id and req.session_id != "anon" else (
         request.client.host if request.client else "anon"
     )
+    # Validate role (Node.js backend passes it from the session)
+    valid_roles = {"super-admin", "admin", "user"}
+    user_role   = req.user_role if req.user_role in valid_roles else "user"
 
     try:
         result = await JARVIS_BRAIN.chat(
@@ -826,10 +830,27 @@ async def jarvis_brain_chat(req: BrainChatRequest, request: Request):
             user_text  = req.message,
             use_cloud  = req.use_cloud,
             session_id = session_id,
+            user_role  = user_role,
         )
         return result
     except Exception as e:
         logger.error(f"[Brain] Chat error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/jarvis/brain/self-optimize")
+async def jarvis_self_optimize():
+    """
+    Trigger a JARVIS self-improvement cycle (super-admin only — enforced by Node.js).
+    Analyzes past feedback, generates prompt improvement proposals.
+    """
+    try:
+        from engine.jarvis_agent import get_jarvis_agi
+        agi = get_jarvis_agi()
+        result = await agi.prompt_engine.run_self_optimization_cycle(JARVIS_BRAIN)
+        return result
+    except Exception as e:
+        logger.error(f"[SelfOptimize] Error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
