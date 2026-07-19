@@ -16,10 +16,16 @@ import { Router } from 'express'
 import { requireAuth } from '../middleware/auth.js'
 import os from 'os'
 import process from 'process'
+import crypto from 'crypto'
 import {
   appendExchange, listConversations, getConversation,
   starConversation, tagConversation, deleteConversation, getConversationStats,
 } from '../services/ramaConversationStore.js'
+import {
+  saveKnowledgeEntry, listKnowledge, getKnowledgeEntry,
+  updateKnowledgeEntry, deleteKnowledgeEntry, getKnowledgeStats,
+  runConsolidation, checkAndConsolidate, analyzeStorageDecisions,
+} from '../services/ramaKnowledgeStore.js'
 
 const router = Router()
 const AI_URL = process.env.AI_BACKEND_URL ?? 'http://localhost:8001'
@@ -438,8 +444,7 @@ router.post('/brain/chat', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'message too long (max 3000 chars)' })
   }
   try {
-    const crypto = await import('crypto')
-    const sessionHash = crypto.default.createHash('sha256')
+    const sessionHash = crypto.createHash('sha256')
       .update(req.user?.userId ?? 'anon').digest('hex').slice(0, 32)
 
     const data = await aiPost('/jarvis/brain/chat', {
@@ -469,6 +474,46 @@ router.post('/brain/chat', requireAuth, async (req, res) => {
         username: req.user?.username ?? 'unknown',
         userRole: req.user?.role     ?? 'user',
       }).catch(err => console.warn('[brain/chat] conv store error:', err.message))
+
+      // ── Auto-extract knowledge from meaningful responses ──────────────────
+      // Only for admin/super-admin, only for substantive responses (>200 chars)
+      // Only for intents that are likely to produce reusable knowledge
+      const knowledgeIntents = new Set([
+        'RESEARCH','WRITE_CONTENT','CODING_ASSIST','DATA_ANALYSIS',
+        'SECURITY_AUDIT','AUTOMATION','EXPLAIN_CODE','UPGRADE_ALGO',
+        'ANALYZE_ACCURACY','ADD_FEATURE','MODIFY_FEATURE','FETCH_DATA',
+      ])
+      const userRole = req.user?.role ?? 'user'
+      const responseText = data.response ?? ''
+      const intent = data.intent ?? ''
+      if (
+        (userRole === 'super-admin' || userRole === 'admin') &&
+        responseText.length > 200 &&
+        knowledgeIntents.has(intent)
+      ) {
+        const topicPreview = message.trim().slice(0, 70)
+        const typeMap = {
+          RESEARCH: 'research', WRITE_CONTENT: 'general', CODING_ASSIST: 'code',
+          DATA_ANALYSIS: 'insight', SECURITY_AUDIT: 'insight', AUTOMATION: 'code',
+          EXPLAIN_CODE: 'insight', UPGRADE_ALGO: 'insight',
+          ANALYZE_ACCURACY: 'insight', ADD_FEATURE: 'code', MODIFY_FEATURE: 'code',
+          FETCH_DATA: 'market',
+        }
+        saveKnowledgeEntry({
+          type:     typeMap[intent] ?? 'general',
+          topic:    topicPreview,
+          content:  responseText.slice(0, 4000),
+          source:   'rama_response',
+          convId:   data.conv_id,
+          userId:   req.user?.userId,
+          username: req.user?.username,
+          userRole,
+          intent,
+          provider: data.provider ?? 'local',
+          importance: 3,
+          tags:     [intent.toLowerCase()],
+        }).catch(() => {})
+      }
     }
   } catch (err) {
     if (err.name === 'AbortError') return res.status(504).json({ error: 'Brain timeout — AI backend may be busy' })
@@ -937,6 +982,107 @@ router.get('/perception-status', requireAuth, async (req, res) => {
     const data = await aiGet('/agi/perception-status')
     res.json(data)
   } catch { res.status(503).json({ error: 'AI backend unavailable' }) }
+})
+
+// ── Rama Knowledge Store routes ───────────────────────────────────────────────
+
+// GET  /api/jarvis/knowledge               — paginated list
+// POST /api/jarvis/knowledge               — save entry manually
+// GET  /api/jarvis/knowledge/stats         — storage stats
+// GET  /api/jarvis/knowledge/decisions     — Rama's storage decision analysis
+// POST /api/jarvis/knowledge/consolidate   — run consolidation (super-admin)
+// GET  /api/jarvis/knowledge/:id           — single entry
+// PATCH /api/jarvis/knowledge/:id          — update (pin/tag/importance)
+// DELETE /api/jarvis/knowledge/:id         — delete (super-admin)
+
+router.get('/knowledge', requireAuth, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'super-admin') {
+    return res.status(403).json({ error: 'Admin only' })
+  }
+  const page       = Math.max(1,   Number(req.query.page   ?? 1))
+  const limit      = Math.min(100, Number(req.query.limit  ?? 25))
+  const search     = String(req.query.search    ?? '').trim().slice(0, 100)
+  const type       = String(req.query.type      ?? '').trim()
+  const importance = req.query.importance ? Number(req.query.importance) : undefined
+  const pinned     = req.query.pinned === 'true' ? true : req.query.pinned === 'false' ? false : undefined
+  const tags       = req.query.tags ? String(req.query.tags).split(',').map(t => t.trim()).filter(Boolean) : []
+  try {
+    res.json(await listKnowledge({ page, limit, search, type, importance, pinned, tags }))
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+router.post('/knowledge', requireAuth, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'super-admin') {
+    return res.status(403).json({ error: 'Admin only' })
+  }
+  const { type, topic, content, importance, tags, convId } = req.body
+  if (!topic || !content) return res.status(400).json({ error: 'topic and content required' })
+  try {
+    const id = await saveKnowledgeEntry({
+      type, topic, content, importance, tags, convId: convId ?? null,
+      source: 'manual',
+      userId:   req.user?.userId,
+      username: req.user?.username,
+      userRole: req.user?.role,
+    })
+    res.json({ ok: true, id })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+router.get('/knowledge/stats', requireAuth, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'super-admin') {
+    return res.status(403).json({ error: 'Admin only' })
+  }
+  try { res.json(await getKnowledgeStats()) }
+  catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+router.get('/knowledge/decisions', requireAuth, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'super-admin') {
+    return res.status(403).json({ error: 'Admin only' })
+  }
+  try { res.json(await analyzeStorageDecisions()) }
+  catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+router.post('/knowledge/consolidate', requireAuth, async (req, res) => {
+  if (req.user.role !== 'super-admin') return res.status(403).json({ error: 'Super-admin only' })
+  const { type, batchSize } = req.body
+  try { res.json(await runConsolidation({ type: type ?? null, batchSize: batchSize ?? 50 })) }
+  catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+router.get('/knowledge/:id', requireAuth, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'super-admin') {
+    return res.status(403).json({ error: 'Admin only' })
+  }
+  try {
+    const entry = await getKnowledgeEntry(req.params.id)
+    if (!entry) return res.status(404).json({ error: 'Not found' })
+    res.json(entry)
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+router.patch('/knowledge/:id', requireAuth, async (req, res) => {
+  if (req.user.role !== 'admin' && req.user.role !== 'super-admin') {
+    return res.status(403).json({ error: 'Admin only' })
+  }
+  try {
+    await updateKnowledgeEntry(req.params.id, req.body)
+    res.json({ ok: true })
+  } catch (err) { res.status(500).json({ error: err.message }) }
+})
+
+router.delete('/knowledge/:id', requireAuth, async (req, res) => {
+  if (req.user.role !== 'super-admin') return res.status(403).json({ error: 'Super-admin only' })
+  try {
+    await deleteKnowledgeEntry(req.params.id)
+    res.json({ ok: true })
+  } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
 export default router

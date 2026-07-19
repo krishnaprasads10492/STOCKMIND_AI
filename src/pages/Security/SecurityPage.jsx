@@ -57,7 +57,7 @@ function StatCard({ icon, label, value, sublabel, highlight }) {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function SecurityPage() {
-  const { user } = useAuthStore()
+  const { user, token } = useAuthStore()
   const [stats, setStats]       = useState(null)
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState(null)

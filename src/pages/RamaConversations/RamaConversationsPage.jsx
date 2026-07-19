@@ -69,21 +69,35 @@ function MessageBubble({ msg }) {
   )
 }
 
+// Safe inline renderer — no dangerouslySetInnerHTML, no XSS risk
+function renderInline(text, keyPrefix) {
+  const parts = []
+  const re = /(\*\*(.+?)\*\*|`([^`]+)`)/g
+  let last = 0, m, idx = 0
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) parts.push(text.slice(last, m.index))
+    if (m[0].startsWith('**')) {
+      parts.push(<strong key={`${keyPrefix}-b${idx}`}>{m[2]}</strong>)
+    } else {
+      parts.push(<code key={`${keyPrefix}-c${idx}`} className={styles.inlineCode}>{m[3]}</code>)
+    }
+    last = m.index + m[0].length
+    idx++
+  }
+  if (last < text.length) parts.push(text.slice(last))
+  return parts
+}
+
 function MessageContent({ text }) {
-  // Very simple markdown-like rendering: bold, code blocks, bullet points
   const lines = String(text ?? '').split('\n')
   return (
     <div className={styles.msgContent}>
       {lines.map((line, i) => {
         if (line.startsWith('```')) return <div key={i} className={styles.msgCodeFence} />
         if (line.trim().startsWith('- ') || line.trim().startsWith('• ')) {
-          return <div key={i} className={styles.msgBullet}>{line.trim().slice(2)}</div>
+          return <div key={i} className={styles.msgBullet}>{renderInline(line.trim().slice(2), `b${i}`)}</div>
         }
-        // Bold **text**
-        const boldified = line.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-        // Inline code `code`
-        const coded = boldified.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>')
-        return <p key={i} className={styles.msgLine} dangerouslySetInnerHTML={{ __html: coded }} />
+        return <p key={i} className={styles.msgLine}>{renderInline(line, `l${i}`)}</p>
       })}
     </div>
   )
@@ -295,16 +309,6 @@ export default function RamaConversationsPage() {
 
   const LIMIT = 25
 
-  if (!isAdmin) {
-    return (
-      <div className={styles.accessDenied}>
-        <span className={styles.deniedIcon}>🔒</span>
-        <h2>Admin Access Required</h2>
-        <p>Conversation history requires admin or super-admin privileges.</p>
-      </div>
-    )
-  }
-
   const loadConvs = useCallback(async (p = 1) => {
     setLoading(true)
     setError(null)
@@ -350,6 +354,17 @@ export default function RamaConversationsPage() {
     setConvs(cs => cs.filter(c => c._id !== convId))
     setTotal(t => Math.max(0, t - 1))
     loadStats()
+  }
+
+  // Guard — after all hooks (Rules of Hooks: no early return before hooks)
+  if (!isAdmin) {
+    return (
+      <div className={styles.accessDenied}>
+        <span className={styles.deniedIcon}>🔒</span>
+        <h2>Admin Access Required</h2>
+        <p>Conversation history requires admin or super-admin privileges.</p>
+      </div>
+    )
   }
 
   return (

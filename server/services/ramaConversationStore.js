@@ -29,7 +29,7 @@
 
 import crypto from 'crypto'
 import { getMongoService } from './mongoService.js'
-import { writeSecure, readSecure, existsSecure, listSecure } from '../storage/fileStore.js'
+import { writeSecure, readSecure, existsSecure, listSecure, deleteSecure } from '../storage/fileStore.js'
 
 const LOCAL_PREFIX = 'rama_conversations'
 const MAX_MESSAGES_PER_CONV = 200  // hard cap per conversation
@@ -328,7 +328,6 @@ export async function deleteConversation(convId) {
     }
   } catch { /* fallback */ }
   try {
-    const { deleteSecure } = await import('../storage/fileStore.js')
     deleteSecure(`${LOCAL_PREFIX}/${convId}`)
   } catch { /* silent */ }
 }

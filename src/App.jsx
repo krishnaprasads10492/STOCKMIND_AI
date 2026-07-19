@@ -26,6 +26,7 @@ const LearnPage       = lazy(() => import('@pages/Learn/LearnPage.jsx'))
 const ChartsPage      = lazy(() => import('@pages/Charts/ChartsPage.jsx'))
 const SecurityPage    = lazy(() => import('@pages/Security/SecurityPage.jsx'))
 const RamaConversationsPage = lazy(() => import('@pages/RamaConversations/RamaConversationsPage.jsx'))
+const RamaKnowledgePage    = lazy(() => import('@pages/RamaKnowledge/RamaKnowledgePage.jsx'))
 
 function PageLoader() {
   return (
@@ -121,6 +122,11 @@ export default function App() {
             <Route path="/rama-conversations" element={
               <ProtectedRoute adminOnly>
                 <Suspense fallback={<PageLoader />}><RamaConversationsPage /></Suspense>
+              </ProtectedRoute>
+            } />
+            <Route path="/rama-knowledge" element={
+              <ProtectedRoute adminOnly>
+                <Suspense fallback={<PageLoader />}><RamaKnowledgePage /></Suspense>
               </ProtectedRoute>
             } />
           </Route>

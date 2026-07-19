@@ -364,3 +364,66 @@ export async function deleteConversationFromStore(convId, token) {
   })
   return res.json()
 }
+
+// ── Knowledge Store ───────────────────────────────────────────────────────────
+
+export async function fetchKnowledge(params = {}, token) {
+  const p = new URLSearchParams()
+  for (const [k, v] of Object.entries(params)) {
+    if (v != null && v !== '') p.set(k, String(v))
+  }
+  const res = await apiFetch(`/api/jarvis/knowledge?${p}`, {
+    headers: { 'x-session-token': token },
+  })
+  return res.json()
+}
+
+export async function fetchKnowledgeStats(token) {
+  const res = await apiFetch('/api/jarvis/knowledge/stats', {
+    headers: { 'x-session-token': token },
+  })
+  return res.json()
+}
+
+export async function fetchStorageDecisions(token) {
+  const res = await apiFetch('/api/jarvis/knowledge/decisions', {
+    headers: { 'x-session-token': token },
+  })
+  return res.json()
+}
+
+export async function saveKnowledge(entry, token) {
+  const res = await apiFetch('/api/jarvis/knowledge', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json', 'x-session-token': token },
+    body:    JSON.stringify(entry),
+  })
+  return res.json()
+}
+
+export async function updateKnowledge(id, patch, token) {
+  const res = await apiFetch(`/api/jarvis/knowledge/${id}`, {
+    method:  'PATCH',
+    headers: { 'Content-Type': 'application/json', 'x-session-token': token },
+    body:    JSON.stringify(patch),
+  })
+  return res.json()
+}
+
+export async function deleteKnowledge(id, token) {
+  const res = await apiFetch(`/api/jarvis/knowledge/${id}`, {
+    method:  'DELETE',
+    headers: { 'x-session-token': token },
+  })
+  return res.json()
+}
+
+export async function runKnowledgeConsolidation(token, type = null, batchSize = 50) {
+  const res = await apiFetch('/api/jarvis/knowledge/consolidate', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json', 'x-session-token': token },
+    body:    JSON.stringify({ type, batchSize }),
+    timeoutMs: 60_000,
+  })
+  return res.json()
+}

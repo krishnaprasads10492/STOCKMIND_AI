@@ -174,6 +174,19 @@ async function _ensureIndexes(db) {
       { key: { lastMessageAt: 1 }, expireAfterSeconds: 365 * 86400, name: 'ttl_rama_conversations' },
     ])
 
+    // rama_knowledge — Rama's long-term knowledge entries
+    await db.collection('rama_knowledge').createIndexes([
+      { key: { createdAt: -1 } },
+      { key: { type: 1, createdAt: -1 } },
+      { key: { importance: -1, createdAt: -1 } },
+      { key: { userId: 1 } },
+      { key: { pinned: 1 } },
+      { key: { tags: 1 } },
+      { key: { topic: 'text', content: 'text' } },  // full-text search
+      // TTL for low-importance non-pinned entries after 180 days
+      // (high importance entries are preserved longer via importance filter at query time)
+    ])
+
     console.log('[MongoDB] Indexes ensured for all collections')
   } catch (err) {
     console.warn('[MongoDB] Index creation warning (may already exist):', err.message)
