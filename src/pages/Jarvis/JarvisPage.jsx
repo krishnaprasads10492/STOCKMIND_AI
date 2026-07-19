@@ -145,13 +145,13 @@ export default function JarvisPage() {
         <div className={styles.headerLeft}>
           <div className={styles.jarvisLogo}>
             <div className={styles.jarvisOrbIcon}>
-              <span className={styles.jarvisOrbCore}>J</span>
+              <span className={styles.jarvisOrbCore}>R</span>
               <span className={styles.jarvisOrbRingA} aria-hidden="true" />
               <span className={styles.jarvisOrbRingB} aria-hidden="true" />
             </div>
             <div>
-              <h1 className={styles.title}>JARVIS</h1>
-              <p className={styles.subtitle}>Just A Rather Very Intelligent System · AGI v2</p>
+              <h1 className={styles.title}>RAMA</h1>
+              <p className={styles.subtitle}>Righteous Autonomous Market Analyst · AGI v2</p>
             </div>
           </div>
           <div className={`${styles.statusPill} ${connected ? styles.statusOnline : styles.statusOffline}`}>
@@ -185,7 +185,7 @@ export default function JarvisPage() {
       {/* ── Tabs ── */}
       <div className={styles.tabs} role="tablist">
         {[
-          ['chat',       '💬 Chat'],
+          ['chat',       '🪔 Chat with Rama'],
           ['live',       '📡 Live Feed'],
           ['system',     '🖥 System'],
           ['deps',       '📦 Dependencies'],

@@ -69,7 +69,7 @@ export function VoiceCommandIndicator({ onCommand, token }) {
               : commandMode
                 ? <span className={styles.commandMode}>🎙 Listening for command…</span>
                 : listening
-                  ? <span className={styles.listening}>Say "Hey JARVIS [anything]"</span>
+                  ? <span className={styles.listening}>Say "Hey Rama [anything]"</span>
                   : <span className={styles.idle}>Voice ready</span>
             }
           </div>
@@ -88,6 +88,7 @@ export function VoiceCommandIndicator({ onCommand, token }) {
 
           <div className={styles.hint}>
             Examples: "predict NIFTY50" · "go to charts" · "dark mode" · "system health"
+            <br/>Wake word: <strong>"Hey Rama [command]"</strong>
           </div>
         </div>
       )}

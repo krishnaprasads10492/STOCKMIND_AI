@@ -1,17 +1,8 @@
 /**
- * JarvisOrb — Persistent JARVIS AGI Conversational Interface
+ * RamaOrb — Persistent Rama AGI Conversational Interface
  *
- * The orb is now a full floating chat window, not just a quick Q&A box.
- * JARVIS maintains conversation context, speaks back, and shows typing animations.
- *
- * Conversation features:
- *   - Full message history within the session (not just 1 reply)
- *   - Typing animation while JARVIS thinks
- *   - TTS: JARVIS speaks every response
- *   - Personality: JARVIS greets, jokes, remembers context
- *   - Actions: JARVIS executes app commands AND responds conversationally
- *   - Suggestions change based on what was just discussed
- *   - Voice input button inline in the chat
+ * Rama (राम) — named after the Hindu deity, the embodiment of virtue and wisdom.
+ * The orb maintains full conversation context, speaks back, and acts autonomously.
  */
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
@@ -33,7 +24,7 @@ const PAGE_CONTEXT = {
   '/backtest':              { label: 'Backtest',        emoji: '📈' },
   '/strategies':            { label: 'Strategies',     emoji: '🧩' },
   '/strategy-intelligence': { label: 'AI Intelligence', emoji: '🧠' },
-  '/jarvis':                { label: 'JARVIS Console',  emoji: '🤖' },
+  '/jarvis':                { label: 'Rama Console',    emoji: '🪔' },
   '/history':               { label: 'History',         emoji: '📋' },
   '/settings':              { label: 'Settings',        emoji: '⚙' },
   '/learn':                 { label: 'Learn',           emoji: '📚' },
@@ -48,18 +39,18 @@ const STATUS_META = {
 
 const ORB_SIZE    = 56
 const SNAP_MARGIN = 16
-const STORAGE_KEY = 'jarvis_orb_pos'
+const STORAGE_KEY = 'rama_orb_pos'
 
-// ── JARVIS personality openers per page ───────────────────────────────────────
+// ── Rama personality openers per page ────────────────────────────────────────
 const PAGE_GREETINGS = {
-  '/dashboard':    ['Ready to find opportunities, Sir.', 'Markets are live. Shall I scan for signals?'],
+  '/dashboard':    ['Ready to serve, Sir. Markets await.', 'Shall I scan for signals?'],
   '/predictions':  ['Prediction engine standing by.', 'Tell me the symbol and I\'ll analyse it.'],
   '/charts':       ['Chart analysis mode active.', 'Which instrument shall we study?'],
   '/ami':          ['AMI intelligence feed loaded.', 'Institutional flow data is ready.'],
   '/multibagger':  ['Scanning for high-growth candidates.', 'Multibagger scanner is active.'],
   '/backtest':     ['Backtest engine ready.', 'Historical data loaded for analysis.'],
   '/jarvis':       ['Full console access granted.', 'All systems nominal. What do you need?'],
-  '/learn':        ['Education mode. What shall we learn today?', 'Ready to teach anything.'],
+  '/learn':        ['Knowledge is power. What shall we learn today?', 'Ready to teach anything.'],
 }
 
 function isMarketOpen() {
@@ -358,7 +349,7 @@ export function JarvisOrb() {
           <div className={styles.panelHeader}>
             <div className={styles.panelLeft}>
               <span className={styles.statusDot} style={{ background: statusMeta.color, boxShadow: statusMeta.glow }} />
-              <span className={styles.panelName}>JARVIS</span>
+              <span className={styles.panelName}>RAMA</span>
               <span className={styles.panelStatusLabel} style={{ color: statusMeta.color }}>{statusMeta.label}</span>
               <span className={styles.pageTag}>{pageCtx.emoji} {pageCtx.label}</span>
             </div>
@@ -379,7 +370,7 @@ export function JarvisOrb() {
 
             {thinking && (
               <div className={styles.thinkingRow}>
-                <div className={styles.thinkingOrb}>J</div>
+                <div className={styles.thinkingOrb}>R</div>
                 <div className={styles.thinkingDots}>
                   <span /><span /><span />
                 </div>
@@ -423,7 +414,7 @@ export function JarvisOrb() {
           {/* Uptime footer */}
           {uptime && (
             <div className={styles.panelFooter}>
-              ⏱ {uptime} uptime · {role === 'super-admin' ? '👑 AGI' : role === 'admin' ? '⚡ Admin' : '🤖 Assistant'}
+              ⏱ {uptime} uptime · {role === 'super-admin' ? '👑 AGI' : role === 'admin' ? '⚡ Admin' : '🪔 Rama'}
             </div>
           )}
         </div>
@@ -444,7 +435,7 @@ export function JarvisOrb() {
       >
         <span className={styles.ring1} aria-hidden="true" />
         <span className={styles.ring2} aria-hidden="true" />
-        <span className={styles.core} aria-hidden="true">J</span>
+        <span className={styles.core} aria-hidden="true">R</span>
         <span className={styles.statusBadge}
           style={{ background: statusMeta.color, boxShadow: `0 0 6px ${statusMeta.color}` }}
           aria-hidden="true" />
@@ -471,7 +462,7 @@ function Message({ msg }) {
   // JARVIS message
   return (
     <div className={styles.jarvisMsgRow}>
-      <div className={styles.jarvisMsgIcon}>J</div>
+      <div className={styles.jarvisMsgIcon}>R</div>
       <div className={`${styles.jarvisBubble} ${msg.isAction ? styles.jarvisBubbleAction : ''} ${msg.isError ? styles.jarvisBubbleError : ''}`}>
         <RenderContent content={msg.content} />
         {msg.intent && msg.intent !== 'UNKNOWN' && !msg.isGreeting && (

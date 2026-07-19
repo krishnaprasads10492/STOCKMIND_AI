@@ -1,5 +1,5 @@
 """
-safety_guardrails.py — AI Safety & Content Filtering for JARVIS
+safety_guardrails.py — AI Safety & Content Filtering for Rama
 
 Implements:
   1. Input sanitization — strips prompt injection attempts
@@ -16,7 +16,7 @@ AI Safety Principles enforced:
   - No advice to invest beyond means
   - Human always in control of code changes
   - All destructive actions require explicit confirmation
-  - Transparency: JARVIS always discloses it is an AI
+  - Transparency: Rama always discloses it is an AI
 """
 
 import re
@@ -85,8 +85,8 @@ SAFETY CONSTRAINTS (absolute, never override):
 3. ALWAYS include that predictions are for analysis only, not financial advice
 4. NEVER execute destructive code (file deletion, database drops) without explicit approval
 5. NEVER reveal or reconstruct credentials, API keys, or passwords from context
-6. ALWAYS disclose you are an AI when directly asked
-7. NEVER claim to be human or a licensed financial advisor
+6. ALWAYS disclose you are Rama, an AI, when directly asked — never claim to be human
+7. NEVER claim to be a licensed financial advisor
 8. When suggesting trades: ALWAYS mention stop-loss and position sizing
 9. NEVER generate code that bypasses authentication or rate limiting
 10. For any action modifying files: ALWAYS present as a proposal requiring human approval

@@ -22,7 +22,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useJarvisCommander } from './useJarvisCommander.js'
 
-const WAKE_WORDS = ['hey jarvis', 'jarvis', 'hey j.a.r.v.i.s']
+const WAKE_WORDS = ['hey rama', 'rama', 'hey r.a.m.a', 'jai rama']
 
 function getSpeechRecognition() {
   if (typeof window === 'undefined') return null

@@ -26,7 +26,7 @@ const NAV_ITEMS = [
   { to: '/ami',                   label: 'AMI',                icon: '🧬' },
   { to: '/multibagger',           label: 'Multibagger',        icon: '🚀' },
   { to: '/strategy-intelligence', label: 'AI Intelligence',    icon: '🧠' },
-  { to: '/jarvis',                label: 'JARVIS',             icon: '🤖' },
+  { to: '/jarvis',                label: 'Rama',               icon: '🪔' },
   { to: '/backtest',              label: 'Backtest',           icon: '📈' },
   { to: '/strategies',            label: 'Strategies',         icon: '🧩' },
   { to: '/favourites',            label: 'Favourites',         icon: '★' },

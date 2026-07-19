@@ -24,7 +24,7 @@ const ROLE_CONFIG = {
     label:       'Super-Admin AGI Mode',
     badge:       '👑 AGI',
     badgeColor:  '#a855f7',
-    placeholder: 'Tell JARVIS anything — search the web, modify code, optimize itself…',
+    placeholder: 'Tell Rama anything — search the web, modify code, optimize itself…',
     quickPrompts: [
       { label: '🔍 Web search',       text: 'Search the web for latest LightGBM improvements for financial time series' },
       { label: '🧠 Improve accuracy', text: 'Analyze current ML accuracy, search for improvements, and propose upgrades' },
@@ -57,8 +57,8 @@ const ROLE_CONFIG = {
     useAgent:        false,
   },
   'user': {
-    label:       'Market Assistant',
-    badge:       '🤖 Assistant',
+    label:       'Rama Market Assistant',
+    badge:       '🪔 Rama',
     badgeColor:  '#00ff9d',
     placeholder: 'Ask about signals, indicators, market analysis, trading concepts…',
     quickPrompts: [
@@ -292,16 +292,16 @@ export default function JarvisChat({ token }) {
               {isSuperAdmin ? '👑' : role === 'admin' ? '⚡' : '🤖'}
             </div>
             <h3 className={styles.welcomeTitle}>
-              {isSuperAdmin ? 'JARVIS AGI — Full Power Mode' : role === 'admin' ? 'JARVIS Intelligence' : 'JARVIS Assistant'}
+              {isSuperAdmin ? 'Rama AGI — Full Power Mode' : role === 'admin' ? 'Rama Intelligence' : 'Rama Assistant'}
             </h3>
             <p className={styles.welcomeText}>
               {isSuperAdmin
                 ? hasCloud
-                  ? `Full AGI active via ${PROVIDER_LABELS[capabilities?.providers?.active] ?? 'cloud AI'}. I can search the web, modify code, run analysis, and improve myself. What shall we build?`
+                  ? `Full AGI active via ${PROVIDER_LABELS[capabilities?.providers?.active] ?? 'cloud AI'}. Rama can search the web, modify code, run analysis, and improve itself. What shall we build?`
                   : 'AGI mode active (local reasoning). Add OPENAI_API_KEY, ANTHROPIC_API_KEY, or GROQ_API_KEY in .env to unlock full cloud AI power.'
                 : role === 'admin'
-                  ? 'Market intelligence and system monitoring. Ask me about signals, strategies, indicators, or system health.'
-                  : 'Your market education assistant. Ask me about trading concepts, indicators, signals, or how the AI works.'}
+                  ? 'Market intelligence and system monitoring. Ask Rama about signals, strategies, indicators, or system health.'
+                  : 'Your market education assistant. Ask Rama about trading concepts, indicators, signals, or how the AI works.'}
             </p>
             <div className={styles.quickPrompts}>
               {cfg.quickPrompts.map(p => (
@@ -617,9 +617,10 @@ function renderInline(text) {
 
 function TypingIndicator({ role }) {
   const labels = {
-    'super-admin': 'JARVIS AGI is reasoning…',
-    'admin':       'JARVIS is analyzing…',
-    'user':        'JARVIS is thinking…',
+    'super-admin': 'Rama AGI is reasoning…',
+    'admin':       'Rama is analyzing…',
+    'user':        'Rama is thinking…',
+  }
   }
   return (
     <div className={styles.typing} aria-label="JARVIS is thinking">
