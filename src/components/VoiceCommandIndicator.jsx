@@ -22,7 +22,7 @@ const COMMAND_LABELS = {
 /**
  * @param {{ onCommand: function }} props
  */
-export function VoiceCommandIndicator({ onCommand }) {
+export function VoiceCommandIndicator({ onCommand, token }) {
   const user        = useAuthStore(s => s.user)
   const isSuperAdmin = user?.role === 'super-admin'
 
@@ -32,13 +32,13 @@ export function VoiceCommandIndicator({ onCommand }) {
   const handleCommand = useCallback((evt) => {
     setLastCommand(evt)
     onCommand?.(evt)
-    // Clear after 3 seconds
     setTimeout(() => setLastCommand(null), 3000)
   }, [onCommand])
 
-  const { listening, transcript, commandMode, supported } = useVoiceCommand({
+  const { listening, transcript, commandMode, supported, processing } = useVoiceCommand({
     onCommand: handleCommand,
     enabled: enabled && isSuperAdmin,
+    token,
   })
 
   // Only render for super-admin
@@ -64,11 +64,13 @@ export function VoiceCommandIndicator({ onCommand }) {
       {enabled && (
         <div className={styles.panel}>
           <div className={styles.panelStatus}>
-            {commandMode
-              ? <span className={styles.commandMode}>🎙 Listening for command…</span>
-              : listening
-                ? <span className={styles.listening}>Listening — say "Hey JARVIS"</span>
-                : <span className={styles.idle}>Voice ready</span>
+            {processing
+              ? <span className={styles.commandMode}>⟳ Processing…</span>
+              : commandMode
+                ? <span className={styles.commandMode}>🎙 Listening for command…</span>
+                : listening
+                  ? <span className={styles.listening}>Say "Hey JARVIS [anything]"</span>
+                  : <span className={styles.idle}>Voice ready</span>
             }
           </div>
 
@@ -78,14 +80,14 @@ export function VoiceCommandIndicator({ onCommand }) {
             </div>
           )}
 
-          {lastCommand && lastCommand.command !== 'UNKNOWN' && (
+          {lastCommand?.reply && (
             <div className={styles.lastCommand}>
-              {COMMAND_LABELS[lastCommand.command] ?? lastCommand.command}
+              🤖 {lastCommand.reply.slice(0, 60)}
             </div>
           )}
 
           <div className={styles.hint}>
-            Commands: status · scan · ghost mode · approve all · show alerts
+            Examples: "predict NIFTY50" · "go to charts" · "dark mode" · "system health"
           </div>
         </div>
       )}

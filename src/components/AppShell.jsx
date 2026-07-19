@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@store/authStore.js'
 import { useThemeStore } from '@store/themeStore.js'
+import { useMarketStore } from '@store/marketStore.js'
 import { logoutApi } from '@services/backendClient.js'
 import { useSessionTimeout } from '@hooks/useSessionTimeout.js'
 import { ErrorBoundary } from './ErrorBoundary.jsx'
@@ -15,6 +16,7 @@ import { VoiceCommandIndicator } from './VoiceCommandIndicator.jsx'
 import { DangerSignalBanner } from './DangerSignalBanner.jsx'
 import { PWAInstallBanner } from './PWAInstallBanner.jsx'
 import { JarvisOrb } from './JarvisOrb.jsx'
+import { apiFetch } from '@services/apiClient.js'
 import styles from './AppShell.module.css'
 
 const NAV_ITEMS = [
@@ -34,22 +36,123 @@ const NAV_ITEMS = [
 ]
 
 export function AppShell() {
-  const { user, clearSession } = useAuthStore()
-  const { activeTheme, toggleTheme, nightLight, setNightLight } = useThemeStore()
+  const { user, clearSession, token } = useAuthStore()
+  const { activeTheme, toggleTheme, nightLight, setNightLight, applyTheme } = useThemeStore()
+  const { setActiveModule, setActiveSymbol } = useMarketStore()
   const navigate = useNavigate()
   const [timeoutWarning,  setTimeoutWarning]  = useState(false)
   const [showNightPanel,  setShowNightPanel]  = useState(false)
   const [showKeygen,      setShowKeygen]      = useState(false)
   const [showChangePw,    setShowChangePw]    = useState(false)
+  const [jarvisToast,     setJarvisToast]     = useState(null)  // { text, type }
+  const jarvisToastTimer = useRef(null)
   const nightPanelRef = useRef(null)
 
   const isSuperAdmin = user?.role === 'super-admin'
   const isLight      = activeTheme === 'light-clean'
-
-  // Force password change on first login
   const mustChangePw = user?.mustChangePassword ?? false
 
   useSessionTimeout(() => setTimeoutWarning(true))
+
+  // Listen for JARVIS actions from the orb and other components
+  useEffect(() => {
+    function handler(e) {
+      const { action, reply } = e.detail ?? {}
+      if (action) handleJarvisAction(action, reply)
+    }
+    window.addEventListener('jarvis:action', handler)
+    return () => window.removeEventListener('jarvis:action', handler)
+  }, [handleJarvisAction])
+
+  function showJarvisToast(text, type = 'info') {
+    clearTimeout(jarvisToastTimer.current)
+    setJarvisToast({ text, type })
+    jarvisToastTimer.current = setTimeout(() => setJarvisToast(null), 4000)
+  }
+
+  // ── JARVIS Universal Action Dispatcher ──────────────────────────────────────
+  // Called by VoiceCommandIndicator and JarvisOrb when JARVIS resolves a command
+  const handleJarvisAction = useCallback(async (action, reply) => {
+    if (!action) return
+    const { type } = action
+
+    switch (type) {
+      case 'navigate':
+        navigate(action.to)
+        break
+
+      case 'generateSignals': {
+        // Set symbol if provided, then navigate to predictions
+        if (action.symbol) setActiveSymbol(action.symbol)
+        navigate(`/predictions${action.symbol ? `?symbol=${action.symbol}` : ''}`)
+        break
+      }
+
+      case 'setSymbol':
+        if (action.symbol) {
+          setActiveSymbol(action.symbol)
+          showJarvisToast(`Symbol: ${action.symbol}`, 'info')
+        }
+        break
+
+      case 'setModule':
+        if (action.moduleId) {
+          setActiveModule(action.moduleId)
+          showJarvisToast(`Market: ${action.moduleId.replace(/-/g, ' ')}`, 'info')
+        }
+        break
+
+      case 'setTheme':
+        if (action.theme) {
+          try { applyTheme?.(action.theme) } catch {}
+        }
+        break
+
+      case 'setNightLight':
+        setNightLight(action.value ?? 0)
+        break
+
+      case 'setChartInterval':
+        // Emit a custom event that ChartsPage can listen to
+        window.dispatchEvent(new CustomEvent('jarvis:setInterval', { detail: action.interval }))
+        break
+
+      case 'systemScan':
+        navigate('/jarvis')
+        // Trigger scan after navigation settles
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('jarvis:scan', { detail: action.scanType }))
+        }, 500)
+        break
+
+      case 'openModal':
+        if (action.modal === 'keygen')         setShowKeygen(true)
+        if (action.modal === 'changePassword') setShowChangePw(true)
+        break
+
+      case 'addFavourite':
+        if (action.symbol) {
+          const { useMarketStore: mStore } = await import('@store/marketStore.js')
+          // Can't call hooks outside — dispatch event
+          window.dispatchEvent(new CustomEvent('jarvis:addFavourite', { detail: action.symbol }))
+          showJarvisToast(`Added ${action.symbol} to favourites`, 'success')
+        }
+        break
+
+      case 'fullscreen':
+        window.dispatchEvent(new CustomEvent('jarvis:fullscreen'))
+        break
+
+      case 'chat':
+        // Free-form response — just show toast, full response in JarvisOrb
+        break
+
+      default:
+        break
+    }
+
+    if (reply) showJarvisToast(`JARVIS: ${reply.slice(0, 80)}`, 'jarvis')
+  }, [navigate, setActiveSymbol, setActiveModule, setNightLight]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Close night panel on outside click
   useEffect(() => {
@@ -62,19 +165,19 @@ export function AppShell() {
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  const handleVoiceCommand = useCallback(({ command }) => {
-    switch (command) {
-      case 'STATUS':
-      case 'SHOW_ALERTS':
-        navigate('/jarvis')
-        break
-      case 'SCAN':
-        navigate('/jarvis')
-        break
-      default:
-        break
+  const handleVoiceCommand = useCallback(({ command, action, reply }) => {
+    // New: action-based dispatch
+    if (action) {
+      handleJarvisAction(action, reply)
+      return
     }
-  }, [navigate])
+    // Legacy fallback
+    switch (command) {
+      case 'STATUS': case 'SHOW_ALERTS': navigate('/jarvis'); break
+      case 'SCAN': navigate('/jarvis'); break
+      default: break
+    }
+  }, [navigate, handleJarvisAction])
 
   async function handleLogout() {
     await logoutApi()
@@ -331,9 +434,22 @@ export function AppShell() {
         <Disclaimer compact />
       </footer>
 
-      {/* Voice command indicator — super-admin only, floating */}
+      {/* ── JARVIS action toast — shows what JARVIS just did ── */}
+      {jarvisToast && (
+        <div
+          className={`${styles.jarvisToast} ${styles[`jarvisToast_${jarvisToast.type}`]}`}
+          role="status"
+          aria-live="polite"
+        >
+          <span className={styles.jarvisToastIcon}>🤖</span>
+          <span className={styles.jarvisToastText}>{jarvisToast.text}</span>
+          <button className={styles.jarvisToastClose} onClick={() => setJarvisToast(null)} aria-label="Dismiss">×</button>
+        </div>
+      )}
+
+      {/* Voice command indicator — super-admin, floating */}
       <ErrorBoundary fallbackMessage="">
-        <VoiceCommandIndicator onCommand={handleVoiceCommand} />
+        <VoiceCommandIndicator onCommand={handleVoiceCommand} token={token} />
       </ErrorBoundary>
 
       {/* Danger signal banner — fixed top, non-dismissible */}

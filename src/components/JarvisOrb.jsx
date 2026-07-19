@@ -17,6 +17,7 @@ import { useAuthStore } from '@store/authStore.js'
 import { apiFetch } from '@services/apiClient.js'
 import { brainChat } from '@services/jarvisClient.js'
 import { usePageVisibility } from '@hooks/usePageVisibility.js'
+import { useJarvisCommander, speak } from '@hooks/useJarvisCommander.js'
 import styles from './JarvisOrb.module.css'
 
 // ── Page context ──────────────────────────────────────────────────────────────
@@ -293,25 +294,42 @@ export function JarvisOrb() {
     toastTimer.current = setTimeout(() => setToast(null), 8000)
   }
 
-  // ── Quick chat ────────────────────────────────────────────────────────────
+  // ── Commander: quick chat executes app actions ───────────────────────────
+  const { processInput } = useJarvisCommander({
+    onAction: (action, reply) => {
+      // Dispatch to AppShell via custom event
+      window.dispatchEvent(new CustomEvent('jarvis:action', { detail: { action, reply } }))
+    },
+    token,
+    enabled: !!token,
+  })
+
+  // ── Quick chat — understand and execute any request ───────────────────────
   const sendQuickChat = useCallback(async (msg) => {
     if (!msg.trim() || chatLoading) return
     setChatLoading(true)
     setChatReply(null)
     try {
-      const data = await brainChat(
-        `[Context: ${pageCtx.label} page] ${msg}`,
-        null, false, token
-      )
-      const reply = data.result ?? data.response ?? 'Processing…'
-      setChatReply(reply.slice(0, 300) + (reply.length > 300 ? '…' : ''))
+      // processInput handles BOTH app actions AND JARVIS brain responses
+      const result = await processInput(msg)
+      if (result?.response) {
+        setChatReply(result.response.slice(0, 300) + (result.response.length > 300 ? '…' : ''))
+      } else {
+        // Fallback to direct brain chat for pure Q&A
+        const data = await brainChat(
+          `[Context: ${pageCtx.label} page] ${msg}`,
+          null, false, token
+        )
+        const reply = data.result ?? data.response ?? 'Processing…'
+        setChatReply(reply.slice(0, 300) + (reply.length > 300 ? '…' : ''))
+      }
     } catch {
       setChatReply('AI backend offline. Start the Python server to enable JARVIS.')
     } finally {
       setChatLoading(false)
       setChatInput('')
     }
-  }, [chatLoading, pageCtx.label, token])
+  }, [chatLoading, pageCtx.label, token, processInput])
 
   // ── Close panel on outside click ─────────────────────────────────────────
   useEffect(() => {

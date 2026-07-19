@@ -1,42 +1,40 @@
 /**
- * useVoiceCommand — Web Speech API voice recognition for super-admin.
+ * useVoiceCommand — Continuous voice recognition with JARVIS NLU.
  *
- * Features:
- * - Keyword detection: "Hey JARVIS" activates command mode
- * - Commands: "status", "scan", "ghost mode", "approve all", "show alerts"
- * - Only activates when user.role === 'super-admin'
- * - Visual indicator when listening
- * - All processing is LOCAL — no audio sent to any server
+ * Upgrade: instead of rigid keyword commands, all speech after "Hey JARVIS"
+ * is sent to useJarvisCommander which understands ANY app action in plain English.
  *
- * @param {{ onCommand: function, enabled: boolean }} options
- * @returns {{ listening: boolean, transcript: string, supported: boolean, startListening: function, stopListening: function, commandMode: boolean }}
+ * Wake word: "Hey JARVIS" or "JARVIS" alone
+ * After wake word: free-form command in plain English
+ *
+ * Examples:
+ *   "Hey JARVIS, go to predictions"
+ *   "Hey JARVIS, show me NIFTY50 signals"
+ *   "Hey JARVIS, switch to crypto"
+ *   "Hey JARVIS, change chart to 15 minutes"
+ *   "Hey JARVIS, dark mode"
+ *   "Hey JARVIS, run backtest"
+ *   "Hey JARVIS, what's the system health?"
+ *
+ * @param {{ onCommand: function, enabled: boolean, token: string }} options
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { useJarvisCommander } from './useJarvisCommander.js'
 
-const WAKE_WORD = 'hey jarvis'
-
-const COMMANDS = {
-  'status':      'STATUS',
-  'scan':        'SCAN',
-  'force scan':  'SCAN',
-  'ghost mode':  'GHOST_MODE',
-  'approve all': 'APPROVE_ALL',
-  'show alerts': 'SHOW_ALERTS',
-  'alerts':      'SHOW_ALERTS',
-  'help':        'HELP',
-}
+const WAKE_WORDS = ['hey jarvis', 'jarvis', 'hey j.a.r.v.i.s']
 
 function getSpeechRecognition() {
   if (typeof window === 'undefined') return null
   return window.SpeechRecognition ?? window.webkitSpeechRecognition ?? null
 }
 
-export function useVoiceCommand({ onCommand, enabled = true }) {
+export function useVoiceCommand({ onCommand, enabled = true, token = null }) {
   const [listening,    setListening]    = useState(false)
   const [transcript,   setTranscript]   = useState('')
   const [commandMode,  setCommandMode]  = useState(false)
   const [supported,    setSupported]    = useState(false)
+  const [processing,   setProcessing]   = useState(false)
 
   const recognitionRef  = useRef(null)
   const commandModeRef  = useRef(false)
@@ -45,14 +43,20 @@ export function useVoiceCommand({ onCommand, enabled = true }) {
 
   useEffect(() => { enabledRef.current = enabled }, [enabled])
 
-  // Check support on mount
-  useEffect(() => {
-    setSupported(!!getSpeechRecognition())
-  }, [])
+  const { processInput } = useJarvisCommander({
+    onAction: (action, reply) => {
+      // Dispatch to AppShell via the onCommand callback
+      onCommand?.({ command: action?.type ?? 'CHAT', action, reply, transcript: transcript })
+    },
+    token,
+    enabled,
+  })
+
+  useEffect(() => { setSupported(!!getSpeechRecognition()) }, [])
 
   const stopListening = useCallback(() => {
     if (recognitionRef.current) {
-      try { recognitionRef.current.stop() } catch { /* ignore */ }
+      try { recognitionRef.current.stop() } catch {}
     }
     setListening(false)
     setCommandMode(false)
@@ -61,124 +65,109 @@ export function useVoiceCommand({ onCommand, enabled = true }) {
   }, [])
 
   const startListening = useCallback(() => {
-    const SpeechRecognition = getSpeechRecognition()
-    if (!SpeechRecognition || !enabledRef.current) return
-
-    // Clean up any existing instance
+    const SR = getSpeechRecognition()
+    if (!SR || !enabledRef.current) return
     if (recognitionRef.current) {
-      try { recognitionRef.current.stop() } catch { /* ignore */ }
+      try { recognitionRef.current.stop() } catch {}
     }
 
-    const recognition = new SpeechRecognition()
-    recognition.continuous     = true
-    recognition.interimResults = true
-    recognition.lang           = 'en-US'
-    recognition.maxAlternatives = 1
+    const recognition = new SR()
+    recognition.continuous      = true
+    recognition.interimResults  = true
+    recognition.lang            = 'en-IN'   // Indian English — better for market terms
+    recognition.maxAlternatives = 3         // try alternatives if primary fails
 
-    recognition.onstart = () => {
-      setListening(true)
-      setTranscript('')
-    }
-
-    recognition.onend = () => {
+    recognition.onstart  = () => { setListening(true); setTranscript('') }
+    recognition.onend    = () => {
       setListening(false)
-      // Auto-restart if still enabled (continuous listening)
+      // Auto-restart
       if (enabledRef.current) {
-        setTimeout(() => {
-          if (enabledRef.current) startListening()
-        }, 500)
+        setTimeout(() => { if (enabledRef.current) startListening() }, 600)
       }
     }
-
-    recognition.onerror = (event) => {
-      // Ignore no-speech errors — they're normal
-      if (event.error === 'no-speech') return
-      if (event.error === 'aborted') return
+    recognition.onerror  = (e) => {
+      if (e.error === 'no-speech' || e.error === 'aborted') return
       setListening(false)
     }
 
-    recognition.onresult = (event) => {
-      let finalText = ''
-      let interimText = ''
-
+    recognition.onresult = async (event) => {
+      let finalText = '', interimText = ''
       for (let i = event.resultIndex; i < event.results.length; i++) {
-        const result = event.results[i]
-        if (result.isFinal) {
-          finalText += result[0].transcript
-        } else {
-          interimText += result[0].transcript
-        }
+        const r = event.results[i]
+        // Check all alternatives for the best match
+        const best = r[0].transcript
+        if (r.isFinal) finalText   += best
+        else           interimText += best
       }
 
       const text = (finalText || interimText).toLowerCase().trim()
       setTranscript(text)
 
+      // ── Wake word detection ──────────────────────────────────────────────
       if (!commandModeRef.current) {
-        // Check for wake word
-        if (text.includes(WAKE_WORD)) {
-          commandModeRef.current = true
-          setCommandMode(true)
-          // Extract command after wake word
-          const afterWake = text.split(WAKE_WORD).pop()?.trim() ?? ''
-          if (afterWake) {
-            processCommand(afterWake)
-          } else {
-            // Wait 3 seconds for a command
-            clearTimeout(commandTimerRef.current)
-            commandTimerRef.current = setTimeout(() => {
-              commandModeRef.current = false
-              setCommandMode(false)
-            }, 3000)
+        const hasWake = WAKE_WORDS.some(w => text.includes(w))
+        if (!hasWake) return
+
+        commandModeRef.current = true
+        setCommandMode(true)
+
+        // Extract command immediately if it follows the wake word
+        let command = text
+        for (const w of WAKE_WORDS) {
+          const idx = text.indexOf(w)
+          if (idx !== -1) {
+            command = text.slice(idx + w.length).trim()
+            break
           }
         }
+
+        if (command && finalText) {
+          // Have a complete command right after wake word
+          await executeCommand(command)
+          commandModeRef.current = false
+          setCommandMode(false)
+        } else {
+          // Wait up to 4 seconds for the user to finish speaking
+          clearTimeout(commandTimerRef.current)
+          commandTimerRef.current = setTimeout(() => {
+            commandModeRef.current = false
+            setCommandMode(false)
+          }, 4000)
+        }
       } else if (finalText) {
-        // We're in command mode — process the command
+        // In command mode — user finished speaking their command
         clearTimeout(commandTimerRef.current)
-        processCommand(finalText.toLowerCase().trim())
         commandModeRef.current = false
         setCommandMode(false)
+        // Use the text after wake word if we captured it above, else full text
+        const commandText = WAKE_WORDS.reduce((t, w) => {
+          const idx = t.indexOf(w)
+          return idx !== -1 ? t.slice(idx + w.length).trim() : t
+        }, finalText.toLowerCase().trim())
+        if (commandText) await executeCommand(commandText)
       }
     }
 
     recognitionRef.current = recognition
+    try { recognition.start() } catch {}
+  }, [processInput]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function executeCommand(text) {
+    if (!text || processing) return
+    setProcessing(true)
     try {
-      recognition.start()
-    } catch { /* ignore start errors */ }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  function processCommand(text) {
-    const cleaned = text.replace(/[^a-z\s]/g, '').trim()
-
-    for (const [phrase, command] of Object.entries(COMMANDS)) {
-      if (cleaned.includes(phrase)) {
-        onCommand?.({ command, transcript: text })
-        return
-      }
+      await processInput(text)
+    } finally {
+      setProcessing(false)
     }
-
-    // Unknown command — still notify so UI can show feedback
-    onCommand?.({ command: 'UNKNOWN', transcript: text })
   }
 
-  // Auto-start when enabled changes
   useEffect(() => {
     if (!supported) return
-    if (enabled) {
-      startListening()
-    } else {
-      stopListening()
-    }
-    return () => {
-      stopListening()
-    }
+    if (enabled) startListening()
+    else         stopListening()
+    return () => stopListening()
   }, [enabled, supported]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  return {
-    listening,
-    transcript,
-    commandMode,
-    supported,
-    startListening,
-    stopListening,
-  }
+  return { listening, transcript, commandMode, supported, processing, startListening, stopListening }
 }
